@@ -1,0 +1,18 @@
+# WAGMI Robots.txt
+User-agent: *
+Allow: /
+
+# 禁止爬取管理后台
+Disallow: /admin/
+Disallow: /auth/
+
+# 允许爬取主要内容
+Allow: /insights/
+Allow: /idea-evaluator
+Allow: /ai-mentor
+Allow: /faq
+Allow: /about
+Allow: /whitepaper
+
+# Sitemap 位置
+Sitemap: https://wagmi.ac/sitemap.xml
