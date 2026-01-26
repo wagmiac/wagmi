@@ -86,6 +86,10 @@ func main() {
 	evaluatorHandler := handlers.NewEvaluatorHandler(evaluatorService, paymentService, phService)
 	promoHandler := handlers.NewPromoHandler(paymentService)
 
+	// 发射服务
+	launchService := services.NewLaunchService(cfg, db)
+	launchHandler := handlers.NewLaunchHandler(launchService, db)
+
 	// 设置 Gin 模式
 	if cfg.GinMode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -344,6 +348,55 @@ func main() {
 
 			// 支付回调（无需认证，但需要验证签名）
 			evaluator.POST("/webhook/payment", evaluatorHandler.PaymentWebhook)
+		}
+
+		// ========== IMO API ==========
+		imoHandler := handlers.NewIMOHandler(db)
+		imo := api.Group("/imo")
+		{
+			// 公开接口
+			imo.GET("/projects", imoHandler.ListProjects)              // 获取项目列表
+			imo.GET("/projects/ticker/:ticker", imoHandler.GetProject) // 通过ticker获取项目
+			imo.GET("/projects/:id", imoHandler.GetProjectByID)        // 通过ID获取项目
+			imo.GET("/projects/:id/bids", imoHandler.GetBids)          // 获取项目出价历史
+			imo.GET("/projects/:id/timeline", imoHandler.GetTimeline)  // 获取项目时间线
+			imo.GET("/stats", imoHandler.GetStats)                     // 获取统计数据
+
+			// 钱包认证
+			imo.GET("/wallet/nonce", imoHandler.GetWalletNonce) // 获取签名 nonce
+			imo.POST("/wallet/verify", imoHandler.VerifyWallet) // 验证钱包签名
+
+			// 用户相关
+			imo.GET("/users/wallet/:wallet", imoHandler.GetUserByWallet)   // 通过钱包获取用户
+			imo.GET("/users/:userId/projects", imoHandler.GetUserProjects) // 获取用户的项目
+			imo.GET("/users/:userId/bids", imoHandler.GetUserBids)         // 获取用户的出价
+
+			// 需要钱包认证的接口（TODO: 添加钱包认证中间件）
+			imo.POST("/projects", imoHandler.CreateProject)                 // 创建项目（发掘）
+			imo.POST("/projects/:id/bids", imoHandler.PlaceBid)             // 出价
+			imo.POST("/projects/:id/claims", imoHandler.SubmitClaimRequest) // 提交认领申请
+
+			// 管理员接口（TODO: 添加管理员权限验证）
+			imoAdmin := imo.Group("/admin")
+			{
+				imoAdmin.POST("/projects/:id/start-auction", imoHandler.StartAuction)     // 开始竞拍
+				imoAdmin.POST("/projects/:id/end-auction", imoHandler.EndAuction)         // 结束竞拍
+				imoAdmin.POST("/projects/:id/launched", imoHandler.MarkLaunched)          // 标记已发射
+				imoAdmin.GET("/projects/:id/claims", imoHandler.GetClaimRequests)         // 获取认领申请
+				imoAdmin.POST("/claims/:claimId/approve", imoHandler.ApproveClaimRequest) // 批准认领
+
+				// 发射相关
+				imoAdmin.GET("/launching", launchHandler.ListLaunchingProjects)                 // 待发射项目
+				imoAdmin.POST("/projects/:id/generate-wallet", launchHandler.GenerateDevWallet) // 生成Dev钱包
+				imoAdmin.GET("/projects/:id/wallet", launchHandler.GetDevWallet)                // 获取Dev钱包
+				imoAdmin.POST("/projects/:id/launch", launchHandler.Launch)                     // 执行发射
+				imoAdmin.GET("/projects/:id/launch-status", launchHandler.GetLaunchStatus)      // 发射状态
+				imoAdmin.POST("/projects/:id/distribute", launchHandler.DistributeRevenue)      // 分发收益
+				imoAdmin.GET("/projects/:id/revenues", launchHandler.GetRevenueRecords)         // 分成记录
+			}
+
+			// 用户收益查询
+			imo.GET("/revenue/:wallet", launchHandler.GetUserRevenue) // 用户收益
 		}
 	}
 

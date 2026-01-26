@@ -1,13 +1,30 @@
-# WAGMI Platform
+# WAGMI IMO Platform
 
-WAGMI 是一个 Web3 代币管理和内容发布平台，提供代币信息展示、内容管理、AI 辅助等功能。
+WAGMI IMO (Initial Meme Offering) 是一个社区驱动的 Meme 币发射平台。
+
+**核心理念：社区可以给任何项目发 Meme 币！**
+
+## 🚀 功能特性
+
+- 🔍 **发掘 (Discover)**: 伯乐支付 $99 发掘有潜力的项目
+- 💰 **竞拍 (Auction)**: 社区成员竞拍代币发射权
+- 🚀 **发射 (Launch)**: 赢家在 pump.fun/trends.fun/bags.fm/flap.sh 发射代币
+- 💎 **分成 (Revenue)**: Creator 70%, Scout 10%, Platform 20%
+
+## 支持的链
+
+| 链 | 发射台 |
+|---|---|
+| Solana | pump.fun, trends.fun, bags.fm |
+| BSC | flap.sh |
 
 ## 项目结构
 
 ```
 wagmi/
 ├── content-engine/    # Go 后端服务
-└── web/               # Next.js 前端应用
+├── frontend/          # Next.js 前端应用
+└── docs/              # 设计文档
 ```
 
 ## 技术栈
@@ -17,29 +34,19 @@ wagmi/
 - **框架**: Gin
 - **ORM**: GORM
 - **数据库**: PostgreSQL
-- **AI**: POE API / Grok API
 
-### 前端 (web)
-- **框架**: Next.js 16+ (App Router)
+### 前端 (frontend)
+- **框架**: Next.js 15+ (App Router)
 - **语言**: TypeScript
 - **UI**: React 19, Tailwind CSS
-- **状态管理**: React Context
-- **国际化**: 自定义 i18n
-
-## 功能特性
-
-- 🪙 **代币管理**: 创建、发布、管理代币信息
-- 📝 **内容引擎**: AI 辅助内容创作和管理
-- 🔐 **多登录方式**: 钱包登录、Google、Twitter OAuth
-- 🌐 **国际化**: 中英文双语支持
-- 🎨 **现代 UI**: 深色主题，响应式设计
+- **钱包**: Phantom, Solflare, MetaMask
 
 ## 快速开始
 
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/your-username/wagmi.git
+git clone https://github.com/wagmiac/wagmi.git
 cd wagmi
 ```
 
@@ -48,18 +55,18 @@ cd wagmi
 ```bash
 cd content-engine
 cp .env.example .env
-# 编辑 .env 配置数据库和 API 密钥
+# 编辑 .env 配置数据库
 go run cmd/server/main.go
 ```
 
 ### 3. 启动前端
 
 ```bash
-cd web
+cd frontend
 cp .env.example .env.local
 # 编辑 .env.local 配置 API 地址
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
 
 ## 环境变量
@@ -71,16 +78,40 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=your_password
-DB_NAME=wagmi
-POE_API_KEY=your_poe_api_key
+DB_NAME=wagmi_imo
+JWT_SECRET=your_jwt_secret
+WALLET_ENCRYPTION_KEY=your_32_byte_key
+PLATFORM_WALLET=your_wallet_address
 ```
 
 ### 前端 (.env.local)
 ```env
-NEXT_PUBLIC_CONTENT_API_URL=http://localhost:8080/api
+NEXT_PUBLIC_API_URL=http://localhost:8080/api
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
 ```
 
+## API 文档
+
+### IMO 接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/imo/projects` | 项目列表 |
+| GET | `/api/imo/projects/ticker/:ticker` | 获取项目 |
+| POST | `/api/imo/projects` | 发掘项目 |
+| POST | `/api/imo/projects/:id/bids` | 出价 |
+| GET | `/api/imo/projects/:id/timeline` | 时间线 |
+| GET | `/api/imo/stats` | 统计数据 |
+| GET | `/api/imo/wallet/nonce` | 获取签名 nonce |
+| POST | `/api/imo/wallet/verify` | 验证钱包 |
+
 ## 部署
+
+详见 [DEPLOY.md](./DEPLOY.md)
+
+## License
+
+MIT
 
 详细部署说明请参考各子项目的 README。
 

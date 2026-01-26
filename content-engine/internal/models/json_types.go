@@ -31,3 +31,29 @@ func (j JSONArray) Value() (driver.Value, error) {
 	}
 	return json.Marshal(j)
 }
+
+// JSONMap 用于处理 PostgreSQL 的 JSONB 对象类型
+type JSONMap map[string]interface{}
+
+// Scan 实现 sql.Scanner 接口
+func (j *JSONMap) Scan(value interface{}) error {
+	if value == nil {
+		*j = make(map[string]interface{})
+		return nil
+	}
+
+	bytes, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
+	}
+
+	return json.Unmarshal(bytes, j)
+}
+
+// Value 实现 driver.Valuer 接口
+func (j JSONMap) Value() (driver.Value, error) {
+	if j == nil {
+		return "{}", nil
+	}
+	return json.Marshal(j)
+}

@@ -48,6 +48,12 @@ type Config struct {
 
 	// 数据采集开关
 	DataCollectionEnabled bool
+
+	// IMO 发射相关
+	WalletEncryptionKey string // Dev钱包私钥加密密钥
+	PlatformWallet      string // 平台收款钱包
+	SolanaRPC           string // Solana RPC 节点
+	BSCRPC              string // BSC RPC 节点
 }
 
 func Load() *Config {
@@ -76,6 +82,10 @@ func Load() *Config {
 		TwitterRedirectURL:    getEnv("TWITTER_REDIRECT_URL", "http://localhost:8080/api/auth/twitter/callback"),
 		FrontendURL:           getEnv("FRONTEND_URL", "http://localhost:3000"),
 		DataCollectionEnabled: getEnv("DATA_COLLECTION_ENABLED", "false") == "true",
+		WalletEncryptionKey:   getEnv("WALLET_ENCRYPTION_KEY", "wagmi-dev-key-32bytes-long-key!"),
+		PlatformWallet:        getEnv("PLATFORM_WALLET", ""),
+		SolanaRPC:             getEnv("SOLANA_RPC", "https://api.mainnet-beta.solana.com"),
+		BSCRPC:                getEnv("BSC_RPC", "https://bsc-dataseed.binance.org"),
 	}
 }
 

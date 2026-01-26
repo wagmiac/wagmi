@@ -3,7 +3,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { I18nProvider } from "@/lib/i18n";
 import { NotificationProvider, AnnouncementBanner } from "@/components/notifications";
+import { NotificationProvider as IMONotificationProvider } from "@/components/imo/NotificationContext";
 import AuthWrapper from "@/components/AuthWrapper";
+import { WalletProvider } from "@/lib/wallet/WalletProvider";
+import { SidebarProvider } from "@/components/imo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,11 +23,11 @@ const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://wagmi.fun';
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
-    default: "WAGMI - AI 时代超级个体创业平台",
-    template: "%s | WAGMI"
+    default: "WAGMI IMO - 社区驱动的 Meme 币发射平台",
+    template: "%s | WAGMI IMO"
   },
-  description: "WAGMI 是 AI 时代超级个体的创业平台，提供创业洞察、想法评估、AI导师等工具。发现成功案例，启发你的创业灵感。We're All Gonna Make It!",
-  keywords: ["WAGMI", "超级个体", "AI创业", "独立开发", "Solo Founder", "创业洞察", "收入案例", "MRR", "SaaS", "indie hacker"],
+  description: "WAGMI IMO 是社区驱动的 Meme 币发射平台。发掘有潜力的项目，通过竞拍获得代币发射权，在 pump.fun、trends.fun 等平台发射 Meme 币。We're All Gonna Make It!",
+  keywords: ["WAGMI", "IMO", "Initial Meme Offering", "Meme币", "Solana", "BSC", "pump.fun", "trends.fun", "bags.fm", "flap.sh", "代币发射", "竞拍"],
   authors: [{ name: "WAGMI Team" }],
   creator: "WAGMI",
   alternates: {
@@ -39,9 +42,9 @@ export const metadata: Metadata = {
     locale: "zh_CN",
     alternateLocale: "en_US",
     url: BASE_URL,
-    siteName: "WAGMI",
-    title: "WAGMI - AI 时代超级个体创业平台",
-    description: "发现 AI 时代超级个体的创业故事、收入案例和可复制的方法论。",
+    siteName: "WAGMI IMO",
+    title: "WAGMI IMO - 社区驱动的 Meme 币发射平台",
+    description: "发掘项目，竞拍发射权，在 Solana/BSC 上发射 Meme 币。社区可以给任何项目发 Meme 币！",
     images: [
       {
         url: "/og-image.png",
@@ -96,12 +99,18 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0a0a0a] text-white`}
       >
         <AuthWrapper>
-          <I18nProvider>
-            <NotificationProvider>
-              <AnnouncementBanner />
-              {children}
-            </NotificationProvider>
-          </I18nProvider>
+          <WalletProvider>
+            <SidebarProvider>
+              <I18nProvider>
+                <NotificationProvider>
+                  <IMONotificationProvider>
+                    <AnnouncementBanner />
+                    {children}
+                  </IMONotificationProvider>
+                </NotificationProvider>
+              </I18nProvider>
+            </SidebarProvider>
+          </WalletProvider>
         </AuthWrapper>
       </body>
     </html>

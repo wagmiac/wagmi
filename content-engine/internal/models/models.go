@@ -296,6 +296,11 @@ func AutoMigrate(db *gorm.DB) error {
 		return err
 	}
 
+	// IMO 相关表
+	if err := db.AutoMigrate(&Project{}, &Bid{}, &TimelineEvent{}, &IMOUser{}, &RevenueRecord{}, &ClaimRequest{}); err != nil {
+		return err
+	}
+
 	// 初始化默认标签
 	initDefaultTags(db)
 
