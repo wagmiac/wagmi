@@ -27,6 +27,7 @@ export default function Navigation() {
           <Link href="/tokens" className={`${isActive('/tokens') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`}>{t("nav.tokens")}</Link>
           <Link href="/insights" className={`${isActive('/insights') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`}>{t("nav.insights")}</Link>
           <Link href="/idea-evaluator" className={`${isActive('/idea-evaluator') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`}>{t("nav.ideaEvaluator")}</Link>
+          <Link href="/ph-evaluator" className={`${isActive('/ph-evaluator') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`}>{t("nav.phEvaluator")}</Link>
           <Link href="/ai-mentor" className={`${isActive('/ai-mentor') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`}>{t("nav.aiMentor")}</Link>
           <Link href="/faq" className={`${isActive('/faq') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`}>{t("nav.faq")}</Link>
         </div>
@@ -59,6 +60,7 @@ export default function Navigation() {
           <Link href="/tokens" className={`block ${isActive('/tokens') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`} onClick={() => setMobileMenuOpen(false)}>{t("nav.tokens")}</Link>
           <Link href="/insights" className={`block ${isActive('/insights') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`} onClick={() => setMobileMenuOpen(false)}>{t("nav.insights")}</Link>
           <Link href="/idea-evaluator" className={`block ${isActive('/idea-evaluator') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`} onClick={() => setMobileMenuOpen(false)}>{t("nav.ideaEvaluator")}</Link>
+          <Link href="/ph-evaluator" className={`block ${isActive('/ph-evaluator') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`} onClick={() => setMobileMenuOpen(false)}>{t("nav.phEvaluator")}</Link>
           <Link href="/ai-mentor" className={`block ${isActive('/ai-mentor') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`} onClick={() => setMobileMenuOpen(false)}>{t("nav.aiMentor")}</Link>
           <Link href="/faq" className={`block ${isActive('/faq') ? 'text-[#FF8C00]' : 'text-white'} hover:text-[#FF8C00] transition`} onClick={() => setMobileMenuOpen(false)}>{t("nav.faq")}</Link>
           <hr className="border-white/10" />

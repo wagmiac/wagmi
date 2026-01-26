@@ -291,6 +291,11 @@ func AutoMigrate(db *gorm.DB) error {
 		return err
 	}
 
+	// 评估器相关表
+	if err := db.AutoMigrate(&PHProduct{}, &PHEvaluation{}, &PromoCode{}, &UserCredit{}, &CreditTransaction{}, &PaymentOrder{}); err != nil {
+		return err
+	}
+
 	// 初始化默认标签
 	initDefaultTags(db)
 

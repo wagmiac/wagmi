@@ -38,8 +38,13 @@ func main() {
 	aiService := services.NewAIService(cfg, settingRepo)
 	contentService := services.NewContentService(contentRepo, aiService)
 
+	// 评估器相关服务
+	phService := services.NewPHService(cfg, db)
+	evaluatorService := services.NewEvaluatorService(cfg, db, phService, aiService, settingRepo)
+	paymentService := services.NewPaymentService(cfg, db)
+
 	// 初始化定时任务调度器
-	scheduler := services.NewScheduler(db, aiService)
+	scheduler := services.NewScheduler(cfg, db, aiService)
 	if err := scheduler.Start(); err != nil {
 		log.Printf("⚠️ 调度器启动失败: %v", err)
 	}
@@ -76,6 +81,10 @@ func main() {
 
 	// 代币管理
 	tokenHandler := handlers.NewTokenHandler(db)
+
+	// 评估器处理器
+	evaluatorHandler := handlers.NewEvaluatorHandler(evaluatorService, paymentService, phService)
+	promoHandler := handlers.NewPromoHandler(paymentService)
 
 	// 设置 Gin 模式
 	if cfg.GinMode == "release" {
@@ -160,6 +169,18 @@ func main() {
 			// 	adminTokens.DELETE("/:id", tokenHandler.DeleteToken)        // 删除代币
 			// 	adminTokens.POST("/:id/publish", tokenHandler.PublishToken) // 发布代币
 			// }
+
+			// 优惠码管理（管理员）
+			promo := admin.Group("/admin/promo")
+			{
+				promo.GET("", promoHandler.ListPromoCodes)                                  // 获取优惠码列表
+				promo.POST("", promoHandler.CreatePromoCode)                                // 创建优惠码
+				promo.POST("/batch", promoHandler.BatchCreatePromoCode)                     // 批量创建优惠码
+				promo.DELETE("/:id", promoHandler.DeletePromoCode)                          // 删除优惠码
+				promo.POST("/gift", promoHandler.GiftCredits)                               // 赠送积分
+				promo.GET("/users/:user_id/credits", promoHandler.GetUserCredits)           // 查看用户积分
+				promo.GET("/users/:user_id/transactions", promoHandler.GetUserTransactions) // 查看用户交易
+			}
 		}
 
 		// ========== 公开路由（无需认证）==========
@@ -298,6 +319,31 @@ func main() {
 			adminTokensPublic.DELETE("/:id", tokenHandler.DeleteToken)        // 删除代币
 			adminTokensPublic.POST("/:id/publish", tokenHandler.PublishToken) // 发布代币
 			adminTokensPublic.POST("/upload", tokenHandler.UploadTokenLogo)   // 上传代币图标
+		}
+
+		// ========== 评估器 API ==========
+		evaluator := api.Group("/evaluator")
+		{
+			// 公开接口
+			evaluator.GET("/fetch", evaluatorHandler.FetchProduct)                    // 获取 PH 产品信息
+			evaluator.GET("/products/:id", evaluatorHandler.GetProduct)               // 获取产品详情
+			evaluator.GET("/evaluations", evaluatorHandler.ListEvaluations)           // 获取评估列表
+			evaluator.GET("/evaluations/:id", evaluatorHandler.GetEvaluation)         // 获取评估详情
+			evaluator.GET("/price", evaluatorHandler.GetPrice)                        // 获取价格
+			evaluator.GET("/promo/validate", evaluatorHandler.ValidatePromoCode)      // 验证优惠码
+			evaluator.GET("/payment-addresses", evaluatorHandler.GetPaymentAddresses) // 获取支付地址
+
+			// 需要登录
+			evaluator.POST("/evaluate", handlers.AuthMiddleware(authService), evaluatorHandler.Evaluate)                     // 执行评估
+			evaluator.GET("/credits", handlers.AuthMiddleware(authService), evaluatorHandler.GetMyCredits)                   // 获取我的积分
+			evaluator.GET("/credits/transactions", handlers.AuthMiddleware(authService), evaluatorHandler.GetMyTransactions) // 积分交易记录
+			evaluator.POST("/orders", handlers.AuthMiddleware(authService), evaluatorHandler.CreateOrder)                    // 创建订单
+			evaluator.GET("/orders", handlers.AuthMiddleware(authService), evaluatorHandler.GetMyOrders)                     // 我的订单
+			evaluator.GET("/orders/:id", handlers.AuthMiddleware(authService), evaluatorHandler.GetOrder)                    // 订单详情
+			evaluator.POST("/orders/:id/confirm", handlers.AuthMiddleware(authService), evaluatorHandler.ConfirmOrder)       // 确认支付
+
+			// 支付回调（无需认证，但需要验证签名）
+			evaluator.POST("/webhook/payment", evaluatorHandler.PaymentWebhook)
 		}
 	}
 

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"content-engine/internal/config"
 	"content-engine/internal/models"
 	"content-engine/internal/utils"
 	"encoding/json"
@@ -16,6 +17,7 @@ import (
 
 // Scheduler 定时任务调度器
 type Scheduler struct {
+	cfg       *config.Config
 	db        *gorm.DB
 	aiService *AIService
 	cron      *cron.Cron
@@ -24,8 +26,9 @@ type Scheduler struct {
 }
 
 // NewScheduler 创建调度器
-func NewScheduler(db *gorm.DB, aiService *AIService) *Scheduler {
+func NewScheduler(cfg *config.Config, db *gorm.DB, aiService *AIService) *Scheduler {
 	return &Scheduler{
+		cfg:       cfg,
 		db:        db,
 		aiService: aiService,
 		cron:      cron.New(cron.WithSeconds()),
@@ -35,6 +38,12 @@ func NewScheduler(db *gorm.DB, aiService *AIService) *Scheduler {
 
 // Start 启动调度器
 func (s *Scheduler) Start() error {
+	// 检查数据采集开关
+	if !s.cfg.DataCollectionEnabled {
+		log.Println("🚫 数据采集已关闭（DATA_COLLECTION_ENABLED=false），跳过定时任务调度器")
+		return nil
+	}
+
 	log.Println("📅 启动定时任务调度器...")
 
 	// 加载所有启用的搜索配置
