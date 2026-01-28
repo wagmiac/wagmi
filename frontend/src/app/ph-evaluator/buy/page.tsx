@@ -7,6 +7,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
+import { useToast } from "@/components/ui/Toast";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -24,6 +25,7 @@ export default function BuyCreditsPage() {
   const { locale } = useI18n();
   const { user, token } = useAuth();
   const router = useRouter();
+  const toast = useToast();
 
   const [creditsCount, setCreditsCount] = useState(1);
   const [promoCode, setPromoCode] = useState("");
@@ -122,7 +124,7 @@ export default function BuyCreditsPage() {
       router.push(`/ph-evaluator/pay/${data.id}`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Order creation failed";
-      alert(message);
+      toast.error(message);
     } finally {
       setCreating(false);
     }

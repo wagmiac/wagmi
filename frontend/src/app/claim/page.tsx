@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Sidebar, useSidebar } from "@/components/imo";
-import { useWallet } from "@/lib/wallet/WalletProvider";
+import { useWallet } from "@/lib/wallet/MultiWalletProvider";
 import { REVENUE_SPLIT } from "@/types/imo";
 
 export default function ClaimIndexPage() {

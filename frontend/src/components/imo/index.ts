@@ -9,3 +9,7 @@ export { default as ProjectTimeline } from './ProjectTimeline';
 export { WalletButton, ConnectWalletModal } from './WalletButton';
 export { SidebarProvider, useSidebar, SIDEBAR_WIDTH } from './SidebarContext';
 export { NotificationProvider, useNotification } from './NotificationContext';
+export { default as HeatStats } from './HeatStats';
+export { default as TokenList } from './TokenList';
+export { default as ProjectDiscussion } from './ProjectDiscussion';
+export { DraggableSection, DraggableSidebar } from './DraggableSection';

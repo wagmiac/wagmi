@@ -68,8 +68,8 @@ const eventConfig: Record<TimelineEventType, { icon: string; color: string; labe
 function formatEventDescription(event: TimelineEvent): string {
   switch (event.type) {
     case "discovered":
-      const firstBuy = event.data?.firstBuyAmount as string | undefined;
-      return `伯乐 ${event.actorName || shortenAddress(event.actor)} 发掘并发射${firstBuy ? `，首单 ${firstBuy}` : ""}`;
+      const bidAmount = event.data?.current_bid_amount as string | undefined;
+      return `伯乐 ${event.actorName || shortenAddress(event.actor)} 发掘项目${bidAmount ? `，出价 ${bidAmount}` : ""}`;
     case "launched":
       const launchpad = event.data?.launchpad as string | undefined;
       return `在 ${launchpad || "发射台"} 上链成功`;

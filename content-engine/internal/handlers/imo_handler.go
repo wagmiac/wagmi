@@ -2,23 +2,35 @@ package handlers
 
 import (
 	"content-engine/internal/models"
+	"content-engine/internal/services"
 	"crypto/rand"
 	"encoding/hex"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 )
 
 type IMOHandler struct {
-	db *gorm.DB
+	db                *gorm.DB
+	paymentService    *services.PaymentService
+	evaluationService *services.IMOEvaluationService
+	githubService     *services.GitHubService
 }
 
-func NewIMOHandler(db *gorm.DB) *IMOHandler {
-	return &IMOHandler{db: db}
+func NewIMOHandler(db *gorm.DB, paymentService *services.PaymentService, evaluationService *services.IMOEvaluationService, githubService *services.GitHubService) *IMOHandler {
+	return &IMOHandler{
+		db:                db,
+		paymentService:    paymentService,
+		evaluationService: evaluationService,
+		githubService:     githubService,
+	}
 }
 
 // ========== 项目相关 ==========
@@ -64,6 +76,11 @@ func (h *IMOHandler) ListProjects(c *gin.Context) {
 		return
 	}
 
+	// 调试：打印每个项目的 scout_wallet
+	for _, p := range projects {
+		log.Printf("Project: ticker=%s, scout_wallet=%s, status=%s", p.Ticker, p.ScoutWallet, p.Status)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    projects,
@@ -101,17 +118,160 @@ func (h *IMOHandler) GetProjectByID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": project})
 }
 
+// GetProjectGitHubStats 获取项目的GitHub热度数据
+func (h *IMOHandler) GetProjectGitHubStats(c *gin.Context) {
+	id := c.Param("id")
+
+	var project models.Project
+	if err := h.db.First(&project, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Project not found"})
+		return
+	}
+
+	if project.Github == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    nil,
+			"message": "No GitHub URL provided",
+		})
+		return
+	}
+
+	// 如果数据库中已有 GitHub 数据，直接返回
+	if project.GithubUpdatedAt != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": gin.H{
+				"stars":               project.GithubStars,
+				"forks":               project.GithubForks,
+				"contributors":        project.GithubContributors,
+				"hot_level":           project.GithubHotLevel,
+				"hot_reason":          project.GithubHotReason,
+				"stars_per_day":       project.GithubStarsPerDay,
+				"days_since_creation": project.GithubDaysCreated,
+				"last_commit_days":    project.GithubLastCommit,
+			},
+		})
+		return
+	}
+
+	// 否则调用 GitHub API 获取数据
+	stats, err := h.githubService.GetRepoStats(project.Github)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"data":    nil,
+		})
+		return
+	}
+
+	// 保存到数据库
+	now := time.Now()
+	h.db.Model(&project).Updates(map[string]interface{}{
+		"github_stars":         stats.Stars,
+		"github_forks":         stats.Forks,
+		"github_contributors":  stats.Contributors,
+		"github_hot_level":     stats.HotLevel,
+		"github_hot_reason":    stats.HotReason,
+		"github_stars_per_day": stats.StarsPerDay,
+		"github_days_created":  stats.DaysSinceCreated,
+		"github_last_commit":   stats.DaysSincePushed,
+		"github_updated_at":    now,
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"stars":               stats.Stars,
+			"forks":               stats.Forks,
+			"contributors":        stats.Contributors,
+			"hot_level":           stats.HotLevel,
+			"hot_reason":          stats.HotReason,
+			"stars_per_day":       stats.StarsPerDay,
+			"days_since_creation": stats.DaysSinceCreated,
+			"last_commit_days":    stats.DaysSincePushed,
+		},
+	})
+}
+
+// RefreshProjectGitHubStats 刷新项目的GitHub热度数据（强制从API获取）
+func (h *IMOHandler) RefreshProjectGitHubStats(c *gin.Context) {
+	id := c.Param("id")
+
+	var project models.Project
+	if err := h.db.First(&project, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Project not found"})
+		return
+	}
+
+	if project.Github == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    nil,
+			"message": "No GitHub URL provided",
+		})
+		return
+	}
+
+	// 强制调用 GitHub API 获取数据
+	stats, err := h.githubService.GetRepoStats(project.Github)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"data":    nil,
+		})
+		return
+	}
+
+	// 保存到数据库
+	now := time.Now()
+	h.db.Model(&project).Updates(map[string]interface{}{
+		"github_stars":         stats.Stars,
+		"github_forks":         stats.Forks,
+		"github_contributors":  stats.Contributors,
+		"github_hot_level":     stats.HotLevel,
+		"github_hot_reason":    stats.HotReason,
+		"github_stars_per_day": stats.StarsPerDay,
+		"github_days_created":  stats.DaysSinceCreated,
+		"github_last_commit":   stats.DaysSincePushed,
+		"github_updated_at":    now,
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"stars":               stats.Stars,
+			"forks":               stats.Forks,
+			"contributors":        stats.Contributors,
+			"hot_level":           stats.HotLevel,
+			"hot_reason":          stats.HotReason,
+			"stars_per_day":       stats.StarsPerDay,
+			"days_since_creation": stats.DaysSinceCreated,
+			"last_commit_days":    stats.DaysSincePushed,
+		},
+	})
+}
+
 // CreateProjectRequest 创建项目请求
 type CreateProjectRequest struct {
 	Name        string `json:"name" binding:"required"`
 	Ticker      string `json:"ticker" binding:"required"`
-	Chain       string `json:"chain" binding:"required,oneof=solana bsc"`
-	Launchpad   string `json:"launchpad" binding:"required"`
+	Chain       string `json:"chain"`     // 可选，发掘时不需要选链
+	Launchpad   string `json:"launchpad"` // 可选，发掘时不需要选发射台
 	Logo        string `json:"logo"`
 	Description string `json:"description"`
 	Twitter     string `json:"twitter"`
 	Github      string `json:"github"`
 	Website     string `json:"website"`
+	ProductHunt string `json:"productHunt"` // Product Hunt 链接
+	Discord     string `json:"discord"`     // Discord 链接
+	Reddit      string `json:"reddit"`      // Reddit 链接
+	// 支付信息（二选一：支付交易哈希 或 免单码）
+	PaymentTxHash string `json:"paymentTxHash"`
+	PayerAddress  string `json:"payerAddress"`
+	PromoCode     string `json:"promoCode"` // 免单码
 }
 
 // CreateProject 创建项目（发掘）
@@ -127,6 +287,39 @@ func (h *IMOHandler) CreateProject(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
+	}
+
+	// 验证支付方式：必须提供交易哈希或免单码
+	usedPromoCode := false
+	if req.PromoCode != "" {
+		// 使用免单码
+		if h.paymentService == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Payment service not available"})
+			return
+		}
+		promoCode, err := h.paymentService.ValidatePromoCode(req.PromoCode)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "免单码无效: " + err.Error()})
+			return
+		}
+		// 检查是否是免单类型
+		if promoCode.Type != models.PromoCodeTypeFree {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "此优惠码不是免单码"})
+			return
+		}
+		usedPromoCode = true
+	} else if req.PaymentTxHash == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "请提供支付交易哈希或免单码"})
+		return
+	}
+
+	// 如果使用交易哈希，检查是否已被使用
+	if req.PaymentTxHash != "" {
+		var existingProject models.Project
+		if err := h.db.Where("discover_tx_hash = ?", req.PaymentTxHash).First(&existingProject).Error; err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Payment transaction already used"})
+			return
+		}
 	}
 
 	// 检查 ticker 是否已存在
@@ -147,18 +340,27 @@ func (h *IMOHandler) CreateProject(c *gin.Context) {
 
 	// 创建项目
 	project := models.Project{
-		Name:        req.Name,
-		Ticker:      ticker,
-		Chain:       models.Chain(req.Chain),
-		Launchpad:   models.Launchpad(req.Launchpad),
-		Status:      models.ProjectStatusDiscovering,
-		ScoutID:     user.ID,
-		ScoutWallet: wallet.(string),
-		Logo:        req.Logo,
-		Description: req.Description,
-		Twitter:     req.Twitter,
-		Github:      req.Github,
-		Website:     req.Website,
+		Name:           req.Name,
+		Ticker:         ticker,
+		Chain:          models.Chain(req.Chain),         // 可能为空，后续首单时选择
+		Launchpad:      models.Launchpad(req.Launchpad), // 可能为空，后续首单时选择
+		Status:         models.ProjectStatusDiscovering,
+		ScoutID:        user.ID,
+		ScoutWallet:    wallet.(string),
+		Logo:           req.Logo,
+		Description:    req.Description,
+		Twitter:        req.Twitter,
+		Github:         req.Github,
+		Website:        req.Website,
+		ProductHunt:    req.ProductHunt,
+		Discord:        req.Discord,
+		Reddit:         req.Reddit,
+		DiscoverTxHash: req.PaymentTxHash, // 发掘支付交易哈希
+	}
+
+	// 如果使用免单码，标记为免单
+	if usedPromoCode {
+		project.DiscoverTxHash = "PROMO:" + req.PromoCode
 	}
 
 	if err := h.db.Create(&project).Error; err != nil {
@@ -166,19 +368,195 @@ func (h *IMOHandler) CreateProject(c *gin.Context) {
 		return
 	}
 
+	// 如果使用了免单码，标记为已使用
+	if usedPromoCode {
+		if err := h.paymentService.UsePromoCode(req.PromoCode, user.ID); err != nil {
+			// 记录错误但不影响项目创建
+			// TODO: 可以考虑回滚项目创建
+		}
+	}
+
 	// 更新用户统计
 	h.db.Model(&user).Update("projects_discovered", gorm.Expr("projects_discovered + 1"))
 
 	// 创建时间线事件
+	eventData := models.JSONMap{"ticker": ticker}
+	if req.Chain != "" {
+		eventData["chain"] = req.Chain
+	}
 	event := models.TimelineEvent{
 		ProjectID: project.ID,
 		Type:      models.TimelineEventDiscovered,
 		Actor:     wallet.(string),
-		Data:      models.JSONMap{"ticker": ticker, "chain": req.Chain},
+		Data:      eventData,
 	}
 	h.db.Create(&event)
 
+	// 自动触发AI评估（异步执行，不阻塞返回）
+	if h.evaluationService != nil {
+		go func(projectID string, scoutID string) {
+			_, err := h.evaluationService.EvaluateProject(projectID, "system", &scoutID)
+			if err != nil {
+				// 记录错误但不影响项目创建
+				// TODO: 添加日志记录
+			}
+		}(project.ID, user.ID)
+	}
+
 	c.JSON(http.StatusCreated, gin.H{"success": true, "data": project})
+}
+
+// UpdateProjectRequest 更新项目请求
+type UpdateProjectRequest struct {
+	Name        *string `json:"name"`
+	Logo        *string `json:"logo"`
+	Description *string `json:"description"`
+	Twitter     *string `json:"twitter"`
+	Github      *string `json:"github"`
+	Website     *string `json:"website"`
+	ProductHunt *string `json:"productHunt"`
+	Discord     *string `json:"discord"`
+	Reddit      *string `json:"reddit"`
+}
+
+// UpdateProject 更新项目信息（伯乐/创作者/管理员）
+// @Summary 更新项目信息
+// @Tags IMO
+// @Param id path string true "Project ID"
+// @Param body body UpdateProjectRequest true "Project data"
+// @Success 200 {object} object
+// @Router /api/imo/projects/:id [put]
+func (h *IMOHandler) UpdateProject(c *gin.Context) {
+	// 获取当前用户钱包
+	wallet, exists := c.Get("wallet")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Unauthorized"})
+		return
+	}
+
+	projectID := c.Param("id")
+
+	// 获取项目
+	var project models.Project
+	if err := h.db.First(&project, "id = ?", projectID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Project not found"})
+		return
+	}
+
+	// 权限验证：伯乐、创作者或管理员可以编辑
+	walletStr := wallet.(string)
+	isScout := project.ScoutWallet == walletStr
+	isCreator := project.CreatorWallet == walletStr
+	isAdmin := isAdminWallet(walletStr)
+
+	if !isScout && !isCreator && !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "您没有权限编辑此项目"})
+		return
+	}
+
+	var req UpdateProjectRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	// 更新字段（只更新非空字段）
+	updates := make(map[string]interface{})
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.Logo != nil {
+		updates["logo"] = *req.Logo
+	}
+	if req.Description != nil {
+		updates["description"] = *req.Description
+	}
+	if req.Twitter != nil {
+		updates["twitter"] = *req.Twitter
+	}
+	if req.Github != nil {
+		updates["github"] = *req.Github
+	}
+	if req.Website != nil {
+		updates["website"] = *req.Website
+	}
+	if req.ProductHunt != nil {
+		updates["product_hunt"] = *req.ProductHunt
+	}
+	if req.Discord != nil {
+		updates["discord"] = *req.Discord
+	}
+	if req.Reddit != nil {
+		updates["reddit"] = *req.Reddit
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "No fields to update"})
+		return
+	}
+
+	if err := h.db.Model(&project).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	// 重新加载项目
+	h.db.First(&project, "id = ?", projectID)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": project})
+}
+
+// isAdminWallet 检查是否为管理员钱包
+func isAdminWallet(wallet string) bool {
+	adminWallets := os.Getenv("ADMIN_WALLETS")
+	if adminWallets == "" {
+		return false
+	}
+	for _, w := range strings.Split(adminWallets, ",") {
+		if strings.TrimSpace(w) == wallet {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidatePromoCode 验证免单码
+// @Summary 验证免单码
+// @Tags IMO
+// @Param code query string true "Promo code"
+// @Success 200 {object} object
+// @Router /api/imo/promo/validate [get]
+func (h *IMOHandler) ValidatePromoCode(c *gin.Context) {
+	code := c.Query("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "code is required"})
+		return
+	}
+
+	if h.paymentService == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Payment service not available"})
+		return
+	}
+
+	promoCode, err := h.paymentService.ValidatePromoCode(code)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	// 只接受免单类型的码
+	if promoCode.Type != models.PromoCodeTypeFree {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "此优惠码不是免单码"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":     true,
+		"valid":       true,
+		"code":        promoCode.Code,
+		"description": "免费发掘",
+		"expires_at":  promoCode.ExpiresAt,
+	})
 }
 
 // StartAuction 开始竞拍
@@ -291,7 +669,7 @@ func (h *IMOHandler) PlaceBid(c *gin.Context) {
 
 	// 更新项目当前出价
 	project.CurrentBidAmount = req.Amount
-	project.CurrentBidderID = user.ID
+	project.CurrentBidderID = &user.ID
 	project.CurrentBidder = wallet.(string)
 	project.BidCount++
 
@@ -385,12 +763,56 @@ func (h *IMOHandler) GetUserProjects(c *gin.Context) {
 	var projects []models.Project
 	query := h.db.Model(&models.Project{})
 
-	// 类型筛选：scouted（发掘的）或 won（赢得的）
+	// 判断是 UUID 还是钱包地址
+	// UUID 格式: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36字符，含连字符)
+	// Solana 地址: 32-44 字符的 base58
+	// EVM 地址: 0x + 40 hex 字符
+	isUUID := len(userID) == 36 && strings.Count(userID, "-") == 4
+
+	// 类型筛选
 	projectType := c.Query("type")
+
+	// 多钱包地址支持：如果传入了 wallets 参数，用所有地址查询
+	walletsParam := c.Query("wallets")
+	var walletList []string
+	if walletsParam != "" {
+		walletList = strings.Split(walletsParam, ",")
+		// 转换为小写用于匹配
+		for i, w := range walletList {
+			walletList[i] = strings.ToLower(strings.TrimSpace(w))
+		}
+	}
+
+	// 日志调试
+	log.Printf("GetUserProjects: userID=%s, isUUID=%v, type=%s, wallets=%v", userID, isUUID, projectType, walletList)
+
+	// 类型筛选：scouted（发掘的）或 won（赢得的）或 launched（发射的）
 	if projectType == "scouted" {
-		query = query.Where("scout_id = ?", userID)
+		if len(walletList) > 0 {
+			// 多钱包查询：匹配任意一个钱包地址
+			query = query.Where("LOWER(scout_wallet) IN ?", walletList)
+		} else if isUUID {
+			query = query.Where("scout_id = ?", userID)
+		} else {
+			// 单钱包地址查询
+			query = query.Where("LOWER(scout_wallet) = LOWER(?)", userID)
+		}
 	} else if projectType == "won" {
-		query = query.Where("current_bidder_id = ? AND status IN ?", userID, []string{"launching", "launched"})
+		if len(walletList) > 0 {
+			query = query.Where("LOWER(current_bidder) IN ? AND status IN ?", walletList, []string{"launching", "launched"})
+		} else if isUUID {
+			query = query.Where("current_bidder_id = ? AND status IN ?", userID, []string{"launching", "launched"})
+		} else {
+			query = query.Where("LOWER(current_bidder) = LOWER(?) AND status IN ?", userID, []string{"launching", "launched"})
+		}
+	} else if projectType == "launched" {
+		if len(walletList) > 0 {
+			query = query.Where("(LOWER(scout_wallet) IN ? OR LOWER(current_bidder) IN ?) AND status = ?", walletList, walletList, "launched")
+		} else if isUUID {
+			query = query.Where("(scout_id = ? OR current_bidder_id = ?) AND status = ?", userID, userID, "launched")
+		} else {
+			query = query.Where("(LOWER(scout_wallet) = LOWER(?) OR LOWER(current_bidder) = LOWER(?)) AND status = ?", userID, userID, "launched")
+		}
 	}
 
 	if err := query.Order("created_at desc").Find(&projects).Error; err != nil {
@@ -398,6 +820,7 @@ func (h *IMOHandler) GetUserProjects(c *gin.Context) {
 		return
 	}
 
+	log.Printf("GetUserProjects: found %d projects", len(projects))
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": projects})
 }
 
@@ -418,6 +841,72 @@ func (h *IMOHandler) GetUserBids(c *gin.Context) {
 
 // 存储 nonce（生产环境应使用 Redis）
 var nonceStore = make(map[string]string)
+
+// IMO JWT Secret
+func getIMOJWTSecret() []byte {
+	secret := os.Getenv("IMO_JWT_SECRET")
+	if secret == "" {
+		secret = "imo-jwt-secret-change-in-production"
+	}
+	return []byte(secret)
+}
+
+// generateIMOToken 生成 IMO JWT token
+func generateIMOToken(wallet string, userID string) (string, error) {
+	claims := jwt.MapClaims{
+		"wallet":  wallet,
+		"user_id": userID,
+		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(), // 7天过期
+		"iat":     time.Now().Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(getIMOJWTSecret())
+}
+
+// IMOWalletAuthMiddleware IMO 钱包认证中间件
+func IMOWalletAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Unauthorized"})
+			c.Abort()
+			return
+		}
+
+		// 解析 Bearer token
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Invalid authorization header"})
+			c.Abort()
+			return
+		}
+
+		tokenString := parts[1]
+
+		// 解析 JWT
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return getIMOJWTSecret(), nil
+		})
+
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Invalid token claims"})
+			c.Abort()
+			return
+		}
+
+		// 设置钱包和用户ID到 context
+		c.Set("wallet", claims["wallet"])
+		c.Set("imo_user_id", claims["user_id"])
+		c.Next()
+	}
+}
 
 // GetWalletNonce 获取钱包签名用的 nonce
 func (h *IMOHandler) GetWalletNonce(c *gin.Context) {
@@ -490,14 +979,18 @@ func (h *IMOHandler) VerifyWallet(c *gin.Context) {
 		}
 	}
 
-	// 生成 JWT token（这里简化处理，生产环境需要完整实现）
-	// token := generateJWT(user)
+	// 生成 JWT token
+	token, err := generateIMOToken(user.Wallet, user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to generate token"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"user": user,
-			// "token": token,
+			"user":  user,
+			"token": token,
 		},
 	})
 }
@@ -559,7 +1052,7 @@ func (h *IMOHandler) EndAuction(c *gin.Context) {
 	}
 
 	// 检查是否有出价
-	if project.CurrentBidderID == "" {
+	if project.CurrentBidderID == nil || *project.CurrentBidderID == "" {
 		// 没有人出价，竞拍失败
 		project.Status = models.ProjectStatusFailed
 	} else {
@@ -629,8 +1122,8 @@ func (h *IMOHandler) MarkLaunched(c *gin.Context) {
 	h.db.Create(&event)
 
 	// 更新赢家的统计
-	if project.CurrentBidderID != "" {
-		h.db.Model(&models.IMOUser{}).Where("id = ?", project.CurrentBidderID).
+	if project.CurrentBidderID != nil && *project.CurrentBidderID != "" {
+		h.db.Model(&models.IMOUser{}).Where("id = ?", *project.CurrentBidderID).
 			Update("auctions_won", gorm.Expr("auctions_won + 1"))
 	}
 
@@ -745,4 +1238,208 @@ func (h *IMOHandler) ApproveClaimRequest(c *gin.Context) {
 	h.db.Create(&event)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": claim})
+}
+
+// ========== 项目讨论评论 ==========
+
+// ListProjectComments 获取项目评论列表
+func (h *IMOHandler) ListProjectComments(c *gin.Context) {
+	projectID := c.Param("id")
+	if projectID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "project_id required"})
+		return
+	}
+
+	// 验证项目是否存在
+	var project models.Project
+	if err := h.db.First(&project, "id = ?", projectID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "project not found"})
+		return
+	}
+
+	// 分页
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	// 获取顶级评论
+	var comments []models.ProjectComment
+	if err := h.db.Where("project_id = ? AND parent_id IS NULL", projectID).
+		Order("created_at desc").
+		Offset(offset).
+		Limit(limit).
+		Find(&comments).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	// 获取每条评论的回复
+	var result []map[string]interface{}
+	for _, comment := range comments {
+		var replies []models.ProjectComment
+		h.db.Where("parent_id = ?", comment.ID).Order("created_at asc").Find(&replies)
+
+		result = append(result, map[string]interface{}{
+			"id":         comment.ID,
+			"project_id": comment.ProjectID,
+			"wallet":     comment.Wallet,
+			"nickname":   comment.Nickname,
+			"content":    comment.Content,
+			"like_count": comment.LikeCount,
+			"created_at": comment.CreatedAt,
+			"replies":    replies,
+		})
+	}
+
+	// 获取评论总数
+	var total int64
+	h.db.Model(&models.ProjectComment{}).Where("project_id = ?", projectID).Count(&total)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"items": result,
+			"total": total,
+			"page":  page,
+			"limit": limit,
+		},
+	})
+}
+
+// CreateProjectCommentRequest 创建项目评论请求
+type CreateProjectCommentRequest struct {
+	Content  string  `json:"content" binding:"required"`
+	ParentID *string `json:"parent_id"` // 可选，回复某条评论
+	Nickname string  `json:"nickname"`  // 可选昵称
+}
+
+// CreateProjectComment 创建项目评论
+func (h *IMOHandler) CreateProjectComment(c *gin.Context) {
+	projectID := c.Param("id")
+	if projectID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "project_id required"})
+		return
+	}
+
+	// 验证项目是否存在
+	var project models.Project
+	if err := h.db.First(&project, "id = ?", projectID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "project not found"})
+		return
+	}
+
+	// 获取用户信息（从 IMO JWT）
+	userID, _ := c.Get("imo_user_id")
+	wallet, _ := c.Get("wallet")
+
+	var req CreateProjectCommentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	// 评论长度限制
+	if len(req.Content) > 1000 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "comment too long, max 1000 characters"})
+		return
+	}
+
+	// 如果是回复，验证父评论是否存在
+	if req.ParentID != nil && *req.ParentID != "" {
+		var parentComment models.ProjectComment
+		if err := h.db.First(&parentComment, "id = ?", *req.ParentID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "parent comment not found"})
+			return
+		}
+	}
+
+	// 处理用户ID和钱包
+	userIDStr := ""
+	walletStr := ""
+	if userID != nil {
+		userIDStr = userID.(string)
+	}
+	if wallet != nil {
+		walletStr = wallet.(string)
+	}
+
+	// 必须有用户ID（从 JWT 获取的 UUID）
+	if userIDStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "please login or connect wallet"})
+		return
+	}
+
+	// 昵称处理
+	nickname := req.Nickname
+	if nickname == "" && walletStr != "" {
+		// 默认使用钱包地址缩写作为昵称
+		if len(walletStr) > 8 {
+			nickname = walletStr[:4] + "..." + walletStr[len(walletStr)-4:]
+		} else {
+			nickname = walletStr
+		}
+	}
+
+	comment := models.ProjectComment{
+		ProjectID: projectID,
+		UserID:    userIDStr,
+		Wallet:    walletStr,
+		Nickname:  nickname,
+		Content:   req.Content,
+		ParentID:  req.ParentID,
+	}
+
+	if err := h.db.Create(&comment).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    comment,
+	})
+}
+
+// DeleteProjectComment 删除项目评论（只能删除自己的）
+func (h *IMOHandler) DeleteProjectComment(c *gin.Context) {
+	commentID := c.Param("commentId")
+	if commentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "comment_id required"})
+		return
+	}
+
+	// 获取用户信息（从 IMO JWT）
+	userID, _ := c.Get("imo_user_id")
+
+	userIDStr := ""
+	if userID != nil {
+		userIDStr = userID.(string)
+	}
+
+	if userIDStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "please login first"})
+		return
+	}
+
+	// 检查评论是否存在且属于当前用户
+	var comment models.ProjectComment
+	if err := h.db.First(&comment, "id = ? AND user_id = ?", commentID, userIDStr).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "comment not found or not yours"})
+		return
+	}
+
+	// 删除评论及其所有回复
+	h.db.Where("parent_id = ?", commentID).Delete(&models.ProjectComment{})
+	h.db.Delete(&comment)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "comment deleted",
+	})
 }

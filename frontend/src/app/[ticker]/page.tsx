@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getProjectByTicker } from "@/lib/mock-data";
+import { getProjectByTicker } from "@/lib/api/imo";
+import { Project } from "@/types/imo";
 import ProjectDetailClient from "./ProjectDetailClient";
 
 interface PageProps {
@@ -9,13 +10,15 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { ticker } = await params;
-  const project = getProjectByTicker(ticker);
+  const response = await getProjectByTicker(ticker);
   
-  if (!project) {
+  if (!response.success || !response.data) {
     return {
       title: "项目未找到",
     };
   }
+
+  const project = response.data as Project;
 
   return {
     title: `${project.ticker} - ${project.name}`,
@@ -30,11 +33,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { ticker } = await params;
-  const project = getProjectByTicker(ticker);
+  const response = await getProjectByTicker(ticker);
 
-  if (!project) {
+  if (!response.success || !response.data) {
     notFound();
   }
+
+  const project = response.data as Project;
 
   return <ProjectDetailClient project={project} />;
 }

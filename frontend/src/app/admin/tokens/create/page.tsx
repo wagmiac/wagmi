@@ -6,10 +6,12 @@ import { useAuth } from "@/lib/auth-context";
 import Image from "next/image";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { useToast } from "@/components/ui/Toast";
 
 export default function CreateTokenPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string>("");
   
@@ -40,7 +42,7 @@ export default function CreateTokenPage() {
     e.preventDefault();
     
     if (!formData.name || !formData.symbol || !logoFile) {
-      alert('请填写必填字段');
+      toast.warning('请填写必填字段');
       return;
     }
 
@@ -78,17 +80,17 @@ export default function CreateTokenPage() {
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         if (errorData.error === 'Symbol already exists') {
-          alert('创建失败：代币符号 (Symbol) 已存在，请使用其他符号');
+          toast.error('创建失败：代币符号 (Symbol) 已存在，请使用其他符号');
           return;
         }
         throw new Error(errorData.error || 'Failed to create token');
       }
       
-      alert('代币创建成功！状态：待发布');
+      toast.success('代币创建成功！状态：待发布');
       router.push('/admin/tokens');
     } catch (error) {
       console.error('Failed to create token:', error);
-      alert('创建失败：' + (error instanceof Error ? error.message : '未知错误'));
+      toast.error('创建失败：' + (error instanceof Error ? error.message : '未知错误'));
     } finally {
       setLoading(false);
     }

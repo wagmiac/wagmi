@@ -6,6 +6,7 @@ import Link from "next/link";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/components/ui/Toast";
 
 // Note: metadata must be in a separate file for client components
 // This is handled by the parent layout
@@ -129,6 +130,7 @@ function evaluateIdea(idea: string, targetUser: string, monetization: string, lo
 
 export default function IdeaEvaluatorPage() {
   const { t, locale } = useI18n();
+  const toast = useToast();
   const [idea, setIdea] = useState("");
   const [targetUser, setTargetUser] = useState("");
   const [monetization, setMonetization] = useState("");
@@ -154,7 +156,7 @@ export default function IdeaEvaluatorPage() {
 
   const handleEvaluate = async () => {
     if (idea.length < 10) {
-      alert(locale === 'zh' ? "请至少输入 10 个字描述你的 idea" : "Please enter at least 10 characters to describe your idea");
+      toast.warning(locale === 'zh' ? "请至少输入 10 个字描述你的 idea" : "Please enter at least 10 characters to describe your idea");
       return;
     }
 

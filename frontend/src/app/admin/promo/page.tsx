@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
-import AdminGuard from "@/components/AdminGuard";
+import AdminLayout from "@/components/admin/AdminLayout";
+import Dropdown from "@/components/ui/Dropdown";
+import { useToast } from "@/components/ui/Toast";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -20,6 +22,7 @@ interface PromoCode {
 
 export default function PromoManagementPage() {
   const { token } = useAuth();
+  const toast = useToast();
   const [codes, setCodes] = useState<PromoCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUsed, setShowUsed] = useState(false);
@@ -90,11 +93,23 @@ export default function PromoManagementPage() {
         throw new Error(data.error || "Failed to create");
       }
 
+      const data = await res.json();
       await loadCodes();
-      alert(createForm.count > 1 ? `成功创建 ${createForm.count} 个优惠码` : "优惠码创建成功");
+      
+      // 复制优惠码到剪贴板
+      if (createForm.count === 1 && data.code) {
+        await navigator.clipboard.writeText(data.code);
+        toast.success(`优惠码创建成功并已复制: ${data.code}`);
+      } else if (createForm.count > 1 && data.codes?.length > 0) {
+        const codesText = data.codes.map((c: { code: string }) => c.code).join("\n");
+        await navigator.clipboard.writeText(codesText);
+        toast.success(`成功创建 ${createForm.count} 个优惠码并已复制到剪贴板`);
+      } else {
+        toast.success(createForm.count > 1 ? `成功创建 ${createForm.count} 个优惠码` : "优惠码创建成功");
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "创建失败";
-      alert(message);
+      toast.error(message);
     } finally {
       setCreating(false);
     }
@@ -117,7 +132,7 @@ export default function PromoManagementPage() {
   // 赠送积分
   const giftCredits = async () => {
     if (!giftForm.user_id.trim()) {
-      alert("请输入用户 ID");
+      toast.warning("请输入用户 ID");
       return;
     }
     setGifting(true);
@@ -136,11 +151,11 @@ export default function PromoManagementPage() {
         throw new Error(data.error || "Failed to gift");
       }
 
-      alert(`成功赠送 ${giftForm.amount} 积分给用户`);
+      toast.success(`成功赠送 ${giftForm.amount} 积分给用户`);
       setGiftForm({ user_id: "", amount: 1, reason: "" });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "赠送失败";
-      alert(message);
+      toast.error(message);
     } finally {
       setGifting(false);
     }
@@ -149,7 +164,7 @@ export default function PromoManagementPage() {
   // 复制优惠码
   const copyCode = (code: string) => {
     navigator.clipboard.writeText(code);
-    alert("已复制到剪贴板");
+    toast.success("已复制到剪贴板");
   };
 
   // 获取类型标签
@@ -172,12 +187,9 @@ export default function PromoManagementPage() {
   };
 
   return (
-    <AdminGuard>
-      <div className="min-h-screen bg-black text-white p-8">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-3xl font-bold mb-8">🎟️ 优惠码管理</h1>
-
-          <div className="grid lg:grid-cols-2 gap-8 mb-8">
+    <AdminLayout title="免单码管理">
+      <div className="max-w-6xl">
+        <div className="grid lg:grid-cols-2 gap-6 mb-6">
             {/* 创建优惠码 */}
             <div className="bg-white/5 rounded-2xl p-6">
               <h2 className="text-xl font-bold mb-4">创建优惠码</h2>
@@ -185,15 +197,16 @@ export default function PromoManagementPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">类型</label>
-                  <select
+                  <Dropdown
+                    options={[
+                      { value: "free", label: "免单" },
+                      { value: "discount_percent", label: "折扣（百分比）" },
+                      { value: "discount_amount", label: "减免（固定金额）" },
+                    ]}
                     value={createForm.type}
-                    onChange={(e) => setCreateForm({ ...createForm, type: e.target.value })}
-                    className="w-full px-4 py-2 bg-black/50 border border-white/10 rounded-xl text-white"
-                  >
-                    <option value="free">免单</option>
-                    <option value="discount_percent">折扣（百分比）</option>
-                    <option value="discount_amount">减免（固定金额）</option>
-                  </select>
+                    onChange={(value) => setCreateForm({ ...createForm, type: value })}
+                    size="md"
+                  />
                 </div>
 
                 {createForm.type !== "free" && (
@@ -291,10 +304,10 @@ export default function PromoManagementPage() {
                 </button>
               </div>
             </div>
-          </div>
+        </div>
 
-          {/* 优惠码列表 */}
-          <div className="bg-white/5 rounded-2xl p-6">
+        {/* 优惠码列表 */}
+        <div className="bg-white/5 rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">优惠码列表</h2>
               <label className="flex items-center gap-2 text-sm">
@@ -374,9 +387,8 @@ export default function PromoManagementPage() {
                 </table>
               </div>
             )}
-          </div>
         </div>
       </div>
-    </AdminGuard>
+    </AdminLayout>
   );
 }

@@ -24,6 +24,20 @@ export default function ChainIcon({ chain, size = "md", showName = false }: Chai
   const config = CHAIN_CONFIG[chain];
   const colorClass = chainColorClasses[chain] || "";
   
+  // 如果 chain 无效，显示一个默认图标
+  if (!config) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <div className={`relative ${sizeClasses[size]} bg-gray-500/20 rounded-full flex items-center justify-center`}>
+          <span className="text-xs text-gray-400">?</span>
+        </div>
+        {showName && (
+          <span className="text-sm font-medium text-gray-400">未知链</span>
+        )}
+      </div>
+    );
+  }
+  
   return (
     <div className="flex items-center gap-1.5">
       <div className={`relative ${sizeClasses[size]}`}>

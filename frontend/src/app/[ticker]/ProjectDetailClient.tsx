@@ -1,27 +1,117 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Project, CHAIN_CONFIG } from "@/types/imo";
-import { getMockTimelineEvents } from "@/lib/mock-timeline";
+import { Project, ProjectEvaluation } from "@/types/imo";
 import {
   Sidebar,
   ChainIcon,
   StatusBadge,
   VerificationBadges,
-  ProjectTimeline,
   useSidebar,
+  HeatStats,
+  TokenList,
+  ProjectDiscussion,
 } from "@/components/imo";
 import RevenueFlow from "@/components/imo/RevenueFlow";
+import { useMultiWallet } from "@/lib/wallet/MultiWalletProvider";
+import { EvaluationDetail, EvaluationLoading, EvaluationEmpty, EvaluationInProgress } from "@/components/imo/EvaluationDetail";
+import { getIMOToken } from "@/lib/api/imo";
 
 interface ProjectDetailClientProps {
   project: Project;
 }
 
 export default function ProjectDetailClient({ project }: ProjectDetailClientProps) {
-  const timelineEvents = getMockTimelineEvents(project.id);
   const { sidebarWidth } = useSidebar();
-  const chainConfig = CHAIN_CONFIG[project.chain];
+  const { wallets } = useMultiWallet();
+
+  // 评估状态
+  const [evaluation, setEvaluation] = useState<ProjectEvaluation | null>(null);
+  const [evaluationLoading, setEvaluationLoading] = useState(true);
+  const [isReEvaluating, setIsReEvaluating] = useState(false);
+
+  // 构建验证对象
+  const verification = {
+    twitter: project.verify_twitter || false,
+    github: project.verify_github || false,
+    website: project.verify_website || false,
+    official: project.verify_official || false,
+  };
+
+  // 检查当前用户是否可以编辑（伯乐或创作者）
+  const connectedWallets = wallets
+    .filter((w) => w.address)
+    .map((w) => w.address.toLowerCase());
+  const scoutWallet = project.scout_wallet?.toLowerCase();
+  const creatorWallet = project.creator_wallet?.toLowerCase();
+  const canEdit = connectedWallets.some(
+    (w) => w === scoutWallet || w === creatorWallet
+  );
+  
+  // 检查是否可以重新评估（伯乐且有token）
+  const token = typeof window !== 'undefined' ? getIMOToken() : null;
+  const canReEvaluate = connectedWallets.some((w) => w === scoutWallet) && !!token;
+
+  // 获取评估数据
+  const fetchEvaluation = useCallback(async () => {
+    try {
+      setEvaluationLoading(true);
+      const API_URL = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+      const res = await fetch(`${API_URL}/imo/projects/${project.id}/evaluation`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          setEvaluation(data.data);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch evaluation:', error);
+    } finally {
+      setEvaluationLoading(false);
+    }
+  }, [project.id]);
+
+  useEffect(() => {
+    fetchEvaluation();
+  }, [fetchEvaluation]);
+
+  // 触发重新评估
+  const handleReEvaluate = async () => {
+    if (!token) return;
+    
+    try {
+      setIsReEvaluating(true);
+      const API_URL = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+      const res = await fetch(`${API_URL}/imo/projects/${project.id}/evaluate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          setEvaluation(data.data);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to re-evaluate:', error);
+    } finally {
+      setIsReEvaluating(false);
+    }
+  };
+
+  // 获取评分徽章样式
+  const getGradeBadgeClass = (grade: string) => {
+    if (grade === 'S' || grade === 'A') return 'bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30';
+    if (grade === 'B') return 'bg-amber-500/20 text-amber-500 border border-amber-500/30';
+    if (grade === 'C') return 'bg-orange-500/20 text-orange-500 border border-orange-500/30';
+    return 'bg-red-500/20 text-red-500 border border-red-500/30';
+  };
 
   return (
     <div className="flex min-h-screen bg-[#0a0a0a]">
@@ -52,6 +142,17 @@ export default function ProjectDetailClient({ project }: ProjectDetailClientProp
 
             {/* Status */}
             <div className="flex items-center gap-4">
+              {canEdit && (
+                <Link
+                  href={`/${project.ticker}/edit`}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  编辑
+                </Link>
+              )}
               <StatusBadge status={project.status} size="md" />
             </div>
           </div>
@@ -60,9 +161,9 @@ export default function ProjectDetailClient({ project }: ProjectDetailClientProp
         {/* Content */}
         <div className="p-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Project Info */}
+            {/* Left Column - 代币信息区 */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Project Header */}
+              {/* 模块1: 项目标识 + AI 评分徽章 */}
               <div className="bg-[#111111] border border-white/10 rounded-xl p-6">
                 <div className="flex items-start gap-4">
                   {/* Logo */}
@@ -82,13 +183,19 @@ export default function ProjectDetailClient({ project }: ProjectDetailClientProp
                   </div>
 
                   {/* Info */}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <h1 className="text-2xl font-bold text-white">{project.name}</h1>
                       <ChainIcon chain={project.chain} size="md" showName />
+                      {/* AI 评分徽章 */}
+                      {evaluation && evaluation.overall_grade && (
+                        <div className={`px-3 py-1 rounded-full text-sm font-bold ${getGradeBadgeClass(evaluation.overall_grade)}`}>
+                          AI 评级: {evaluation.overall_grade}
+                        </div>
+                      )}
                     </div>
                     <p className="text-[#FF8C00] font-mono text-lg mb-3">{project.ticker}</p>
-                    <VerificationBadges verification={project.verification} size="lg" />
+                    <VerificationBadges verification={verification} size="lg" />
                   </div>
                 </div>
 
@@ -97,136 +204,152 @@ export default function ProjectDetailClient({ project }: ProjectDetailClientProp
                   {project.description}
                 </p>
 
-                {/* Links */}
-                <div className="flex items-center gap-4 mt-4 pt-4 border-t border-white/10">
-                  {project.website && (
-                    <a
-                      href={project.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-gray-400 hover:text-[#00E5FF] transition"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                      </svg>
-                      官网
-                    </a>
-                  )}
-                  {project.twitter && (
-                    <a
-                      href={project.twitter}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-gray-400 hover:text-[#00E5FF] transition"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                      </svg>
-                      Twitter
-                    </a>
-                  )}
-                  {project.github && (
-                    <a
-                      href={project.github}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-gray-400 hover:text-[#00E5FF] transition"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                      </svg>
-                      GitHub
-                    </a>
+                {/* 模块5: 媒体链接 + 模块6: 发掘者信息 */}
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
+                  {/* Media Links */}
+                  <div className="flex items-center gap-4 flex-wrap">
+                    {project.website && (
+                      <a
+                        href={project.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-gray-400 hover:text-[#00E5FF] transition"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        </svg>
+                        官网
+                      </a>
+                    )}
+                    {project.twitter && (
+                      <a
+                        href={project.twitter}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-gray-400 hover:text-[#00E5FF] transition"
+                      >
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                        </svg>
+                        Twitter
+                      </a>
+                    )}
+                    {project.github && (
+                      <a
+                        href={project.github}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-gray-400 hover:text-[#00E5FF] transition"
+                      >
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                        </svg>
+                        GitHub
+                      </a>
+                    )}
+                    {project.product_hunt && (
+                      <a
+                        href={project.product_hunt}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-gray-400 hover:text-[#DA552F] transition"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M13.337 4H7v16h3.6v-5.6h2.737c3.195 0 5.663-2.468 5.663-5.2S16.532 4 13.337 4m-.063 7.2H10.6V7.2h2.674c1.222 0 2.126.904 2.126 2s-.904 2-2.126 2" />
+                        </svg>
+                        PH
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Scout Info */}
+                  {project.scout_wallet && (
+                    <div className="flex items-center gap-2 text-gray-400 text-sm">
+                      <span className="text-[#FF8C00]">🔍 伯乐</span>
+                      <span className="font-mono text-gray-300">
+                        {project.scout_wallet.slice(0, 4)}...{project.scout_wallet.slice(-4)}
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Token Info (if launched) */}
-              {project.status === "launched" && project.tokenAddress && (
-                <div className="bg-[#111111] border border-white/10 rounded-xl p-6">
-                  <h2 className="text-lg font-bold text-white mb-4">代币信息</h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">合约地址</p>
-                      <p className="text-sm font-mono text-[#00E5FF] break-all">
-                        {project.tokenAddress}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">发射平台</p>
-                      <p className="text-sm text-white">{project.launchpad}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">发射时间</p>
-                      <p className="text-sm text-white">
-                        {project.launchedAt
-                          ? new Date(project.launchedAt).toLocaleString("zh-CN")
-                          : "—"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">伯乐首单</p>
-                      <p className="text-sm font-bold text-[#10B981]">
-                        ${project.firstBuyAmount || 0}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Trade Button */}
-                  <a
-                    href={`https://${project.launchpad}/${project.tokenAddress}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-4 w-full px-4 py-3 bg-[#10B981] text-white font-bold rounded-lg hover:bg-[#059669] transition flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
-                    前往交易
-                  </a>
-                </div>
-              )}
-
-              {/* Scout Info */}
-              <div className="bg-[#111111] border border-white/10 rounded-xl p-6">
-                <h2 className="text-lg font-bold text-white mb-4">发掘信息</h2>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-[#FF8C00]/20 flex items-center justify-center">
-                    <span className="text-2xl">🔍</span>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-400">伯乐</p>
-                    <p className="font-mono text-white">{project.scoutWallet}</p>
-                  </div>
-                  <div className="ml-auto text-right">
-                    <p className="text-sm text-gray-400">发掘时间</p>
-                    <p className="text-white">
-                      {new Date(project.discoveredAt).toLocaleDateString("zh-CN")}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              {/* 代币信息 + AI评估（左侧主内容） */}
+              <MainContent
+                project={project}
+                evaluation={evaluation}
+                evaluationLoading={evaluationLoading}
+                isReEvaluating={isReEvaluating}
+                canReEvaluate={canReEvaluate}
+                onReEvaluate={handleReEvaluate}
+              />
             </div>
 
-            {/* Right Column - Timeline & Revenue */}
+            {/* Right Column - 热度+资金流向+评论 */}
             <div className="space-y-6">
-              {/* Timeline */}
-              <div className="bg-[#111111] border border-white/10 rounded-xl p-4">
-                <h3 className="font-bold text-white mb-4">项目旅程</h3>
-                <ProjectTimeline events={timelineEvents} status={project.status} />
-              </div>
-
-              {/* Revenue Flow - 只对已发射/已认领项目显示 */}
+              <HeatStats projectId={project.id} githubUrl={project.github} />
               {(project.status === "launched" || project.status === "claimed") && (
                 <div className="bg-[#111111] border border-white/10 rounded-xl p-4">
                   <h3 className="font-bold text-white mb-4">资金流向</h3>
                   <RevenueFlow project={project} />
                 </div>
               )}
+              <ProjectDiscussion projectId={project.id} />
             </div>
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+// 主内容区组件（静态布局）
+interface MainContentProps {
+  project: Project;
+  evaluation: ProjectEvaluation | null;
+  evaluationLoading: boolean;
+  isReEvaluating: boolean;
+  canReEvaluate: boolean;
+  onReEvaluate: () => void;
+}
+
+function MainContent({ 
+  project, 
+  evaluation, 
+  evaluationLoading, 
+  isReEvaluating, 
+  canReEvaluate, 
+  onReEvaluate 
+}: MainContentProps) {
+  // 构建评估模块
+  let evaluationElement: React.ReactNode;
+  
+  if (evaluationLoading) {
+    evaluationElement = <EvaluationLoading />;
+  } else if (evaluation) {
+    evaluationElement = (
+      <EvaluationDetail 
+        evaluation={evaluation}
+        onReEvaluate={onReEvaluate}
+        canReEvaluate={canReEvaluate}
+        isReEvaluating={isReEvaluating || !!project.is_evaluating}
+      />
+    );
+  } else if (isReEvaluating || project.is_evaluating) {
+    evaluationElement = <EvaluationInProgress />;
+  } else {
+    evaluationElement = (
+      <EvaluationEmpty 
+        onTrigger={onReEvaluate}
+        canTrigger={canReEvaluate}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <TokenList project={project} />
+      {evaluationElement}
     </div>
   );
 }

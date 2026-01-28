@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -75,16 +77,19 @@ func (s *PaymentService) CreatePromoCode(codeType string, value float64, expires
 	}
 
 	if err := s.db.Create(promoCode).Error; err != nil {
+		log.Printf("Failed to create promo code: %v", err)
 		return nil, err
 	}
 
+	log.Printf("Successfully created promo code: %s (type: %s)", promoCode.Code, promoCode.Type)
 	return promoCode, nil
 }
 
 // ValidatePromoCode 验证优惠码
 func (s *PaymentService) ValidatePromoCode(code string) (*models.PromoCode, error) {
 	var promoCode models.PromoCode
-	if err := s.db.Where("code = ?", code).First(&promoCode).Error; err != nil {
+	// 使用大写比较，忽略大小写
+	if err := s.db.Where("UPPER(code) = ?", strings.ToUpper(code)).First(&promoCode).Error; err != nil {
 		return nil, errors.New("promo code not found")
 	}
 
@@ -440,7 +445,7 @@ func generatePromoCode() (string, error) {
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
-	return "WAGMI-" + hex.EncodeToString(bytes)[:8], nil
+	return "WAGMI-" + strings.ToUpper(hex.EncodeToString(bytes)[:8]), nil
 }
 
 // GiftCredits 管理员赠送积分

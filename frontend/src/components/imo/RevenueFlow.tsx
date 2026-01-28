@@ -33,7 +33,8 @@ export default function RevenueFlow({ project }: RevenueFlowProps) {
   }
 
   // 模拟累计交易税收入（实际应该从项目数据获取）
-  const totalTradingFee = project.claimedRevenue || 0;
+  // 后端暂未提供此字段，使用 0 作为默认值
+  const totalTradingFee = 0;
   
   // 计算各方分成
   const creatorRevenue = totalTradingFee * REVENUE_SPLIT.creator;

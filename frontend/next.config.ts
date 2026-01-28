@@ -1,5 +1,9 @@
 import type { NextConfig } from "next";
 
+// 从 API URL 中提取基础 URL（去掉 /api 后缀）
+const API_URL = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+const API_BASE_URL = API_URL.replace(/\/api$/, '');
+
 const nextConfig: NextConfig = {
   /* config options here */
   images: {
@@ -8,6 +12,12 @@ const nextConfig: NextConfig = {
         protocol: 'http',
         hostname: 'localhost',
         port: '8080',
+        pathname: '/uploads/**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '3209',
         pathname: '/uploads/**',
       },
       {
@@ -29,6 +39,15 @@ const nextConfig: NextConfig = {
     ],
     // 禁用图片优化，直接使用原始图片 URL
     unoptimized: true,
+  },
+  // 代理 /uploads/* 请求到 Go 后端
+  async rewrites() {
+    return [
+      {
+        source: '/uploads/:path*',
+        destination: `${API_BASE_URL}/uploads/:path*`,
+      },
+    ];
   },
 };
 

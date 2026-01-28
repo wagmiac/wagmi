@@ -20,19 +20,26 @@ func NewLaunchHandler(service *services.LaunchService, db *gorm.DB) *LaunchHandl
 	return &LaunchHandler{service: service, db: db}
 }
 
-// GenerateDevWallet 生成Dev钱包
+// GenerateDevWallet 为指定发射台生成 Dev 钱包
 func (h *LaunchHandler) GenerateDevWallet(c *gin.Context) {
 	projectID := c.Param("id")
 
-	// 获取项目
-	var project models.Project
-	if err := h.db.First(&project, "id = ?", projectID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Project not found"})
+	// 从请求体或查询参数获取发射台
+	var req struct {
+		Launchpad string `json:"launchpad"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// 尝试从查询参数获取
+		req.Launchpad = c.Query("launchpad")
+	}
+
+	if req.Launchpad == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "launchpad is required"})
 		return
 	}
 
 	// 生成钱包
-	wallet, err := h.service.GenerateDevWallet(projectID, project.Chain)
+	wallet, err := h.service.GenerateDevWallet(projectID, req.Launchpad)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
@@ -43,13 +50,16 @@ func (h *LaunchHandler) GenerateDevWallet(c *gin.Context) {
 		"data": gin.H{
 			"address":   wallet.Address,
 			"publicKey": wallet.PublicKey,
+			"chain":     wallet.Chain,
+			"launchpad": wallet.Launchpad,
 		},
 	})
 }
 
-// GetDevWallet 获取Dev钱包信息
+// GetDevWallet 获取Dev钱包信息（支持按发射台查询）
 func (h *LaunchHandler) GetDevWallet(c *gin.Context) {
 	projectID := c.Param("id")
+	launchpad := c.Query("launchpad") // 可选参数，指定发射台
 
 	var project models.Project
 	if err := h.db.First(&project, "id = ?", projectID).Error; err != nil {
@@ -57,17 +67,47 @@ func (h *LaunchHandler) GetDevWallet(c *gin.Context) {
 		return
 	}
 
-	if project.DevWalletAddress == "" {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Dev wallet not generated"})
+	// 返回所有发射台的钱包信息
+	wallets := gin.H{}
+
+	// 从 LaunchpadWallets 获取各发射台钱包
+	if project.LaunchpadWallets != nil {
+		for pad, addr := range project.LaunchpadWallets {
+			if addrStr, ok := addr.(string); ok && addrStr != "" {
+				wallets[pad] = gin.H{
+					"address":   addrStr,
+					"launchpad": pad,
+				}
+			}
+		}
+	}
+
+	// 兼容旧数据
+	if len(wallets) == 0 && project.DevWalletAddress != "" {
+		if project.Launchpad != "" {
+			wallets[string(project.Launchpad)] = gin.H{
+				"address":   project.DevWalletAddress,
+				"launchpad": project.Launchpad,
+			}
+		}
+	}
+
+	// 如果指定了发射台，只返回该发射台的钱包
+	if launchpad != "" {
+		if w, ok := wallets[launchpad]; ok {
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"data":    w,
+			})
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Wallet not found for launchpad: " + launchpad})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data": gin.H{
-			"address": project.DevWalletAddress,
-			"chain":   project.Chain,
-		},
+		"data":    wallets,
 	})
 }
 
@@ -102,9 +142,9 @@ func (h *LaunchHandler) Launch(c *gin.Context) {
 		return
 	}
 
-	// 如果没有Dev钱包，先生成
-	if project.DevWalletAddress == "" {
-		_, err := h.service.GenerateDevWallet(projectID, project.Chain)
+	// 如果没有Dev钱包，先生成（使用项目默认的发射台）
+	if project.DevWalletAddress == "" && project.Launchpad != "" {
+		_, err := h.service.GenerateDevWallet(projectID, string(project.Launchpad))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to generate dev wallet: " + err.Error()})
 			return
@@ -221,4 +261,38 @@ func (h *LaunchHandler) ListLaunchingProjects(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": projects})
+}
+
+// ExportDevWalletKey 导出 Dev 钱包私钥（仅管理员）
+// @Summary 导出指定发射台的 Dev 钱包私钥
+// @Tags Launch
+// @Param id path string true "Project ID"
+// @Param body body object true "Request body"
+// @Success 200 {object} object
+// @Router /api/imo/admin/projects/{id}/wallet/export [post]
+func (h *LaunchHandler) ExportDevWalletKey(c *gin.Context) {
+	projectID := c.Param("id")
+
+	var req struct {
+		Launchpad string `json:"launchpad" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "launchpad is required"})
+		return
+	}
+
+	// 获取解密后的私钥
+	privateKey, err := h.service.ExportDevWalletKey(projectID, req.Launchpad)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"privateKey": privateKey,
+			"launchpad":  req.Launchpad,
+		},
+	})
 }

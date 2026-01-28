@@ -1,5 +1,6 @@
 # 忽略 docs 目录
 docs/
+launch-service/
 
 # OS generated files
 .DS_Store

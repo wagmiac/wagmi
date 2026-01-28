@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/components/ui/Toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
 
@@ -12,6 +13,7 @@ interface SubscribeButtonProps {
 
 export default function SubscribeButton({ tag, size = 'md' }: SubscribeButtonProps) {
   const { user, token } = useAuth();
+  const toast = useToast();
   const [subscribed, setSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -36,7 +38,7 @@ export default function SubscribeButton({ tag, size = 'md' }: SubscribeButtonPro
 
   const handleToggle = async () => {
     if (!user) {
-      alert('请先登录');
+      toast.warning('请先登录');
       return;
     }
 

@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Navigation from '@/components/Navigation';
-import Footer from '@/components/Footer';
-import AdminGuard from '@/components/AdminGuard';
+import AdminLayout from '@/components/admin/AdminLayout';
 import { useAuth } from '@/lib/auth-context';
+import Dropdown from '@/components/ui/Dropdown';
 
 const API_BASE = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
 
@@ -287,57 +286,52 @@ export default function AdminSearchConfigClient() {
   };
 
   return (
-    <AdminGuard>
-      <Navigation />
-      <main className="min-h-screen bg-[#0a0a0a] pt-24 pb-16">
-        <div className="max-w-6xl mx-auto px-6">
-          {/* 头部 */}
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">🔍 搜索配置管理</h1>
-              <p className="text-gray-400">管理内容引擎的自动搜索任务</p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleRunAll}
-                disabled={runningAll || configs.filter(c => c.enabled).length === 0}
-                className="px-6 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {runningAll ? '⏳ 运行中...' : '🚀 运行全部'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowExpandForm(true);
-                  setShowForm(false);
-                }}
-                className="px-6 py-3 bg-purple-600 text-white font-semibold rounded-xl hover:bg-purple-500 transition"
-              >
-                🤖 AI 扩展
-              </button>
-              <button
-                onClick={() => {
-                  resetForm();
-                  setEditingId(null);
-                  setShowForm(true);
-                  setShowExpandForm(false);
-                }}
-                className="px-6 py-3 bg-[#FF8C00] text-black font-semibold rounded-xl hover:bg-[#FFAD33] transition"
-              >
-                + 新建配置
-              </button>
-            </div>
+    <AdminLayout title="搜索配置">
+      <div>
+        {/* 头部 */}
+        <div className="flex items-center justify-between mb-6">
+          <p className="text-gray-400">管理内容引擎的自动搜索任务</p>
+          <div className="flex gap-3">
+            <button
+              onClick={handleRunAll}
+              disabled={runningAll || configs.filter(c => c.enabled).length === 0}
+              className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-500 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              {runningAll ? '⏳ 运行中...' : '🚀 运行全部'}
+            </button>
+            <button
+              onClick={() => {
+                setShowExpandForm(true);
+                setShowForm(false);
+              }}
+              className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-500 transition text-sm"
+            >
+              🤖 AI 扩展
+            </button>
+            <button
+              onClick={() => {
+                resetForm();
+                setEditingId(null);
+                setShowForm(true);
+                setShowExpandForm(false);
+              }}
+              className="px-6 py-3 bg-[#FF8C00] text-black font-semibold rounded-xl hover:bg-[#FFAD33] transition"
+            >
+              + 新建配置
+            </button>
           </div>
+        </div>
 
-          {/* 提示消息 */}
-          {message && (
-            <div className="mb-6 p-4 bg-[#FF8C00]/10 border border-[#FF8C00]/30 rounded-xl text-[#FF8C00]">
-              {message}
-            </div>
-          )}
+        {/* 提示消息 */}
+        {message && (
+          <div className="mb-6 p-4 bg-[#FF8C00]/10 border border-[#FF8C00]/30 rounded-xl text-[#FF8C00]">
+            {message}
+          </div>
+        )}
 
-          {/* AI 扩展表单 */}
-          {showExpandForm && (
-            <div className="mb-8 bg-[#1a1a1a] border border-purple-500/30 rounded-2xl p-6">
+        {/* AI 扩展表单 */}
+        {showExpandForm && (
+          <div className="mb-8 bg-[#1a1a1a] border border-purple-500/30 rounded-2xl p-6">
               <h2 className="text-xl font-semibold text-white mb-2">🤖 AI 智能扩展关键词</h2>
               <p className="text-gray-400 text-sm mb-6">输入一个种子词，AI 会自动生成多个相关搜索关键词并创建配置</p>
               <form onSubmit={handleExpand} className="space-y-6">
@@ -357,16 +351,17 @@ export default function AdminSearchConfigClient() {
                 {/* 生成数量 */}
                 <div>
                   <label className="block text-sm text-gray-400 mb-2">生成数量</label>
-                  <select
-                    value={expandData.count}
-                    onChange={(e) => setExpandData({ ...expandData, count: parseInt(e.target.value) })}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500/50"
-                  >
-                    <option value={5} className="bg-[#1a1a1a]">5 个</option>
-                    <option value={10} className="bg-[#1a1a1a]">10 个</option>
-                    <option value={15} className="bg-[#1a1a1a]">15 个</option>
-                    <option value={20} className="bg-[#1a1a1a]">20 个</option>
-                  </select>
+                  <Dropdown
+                    options={[
+                      { value: "5", label: "5 个" },
+                      { value: "10", label: "10 个" },
+                      { value: "15", label: "15 个" },
+                      { value: "20", label: "20 个" },
+                    ]}
+                    value={String(expandData.count)}
+                    onChange={(value) => setExpandData({ ...expandData, count: parseInt(value) })}
+                    size="md"
+                  />
                 </div>
 
                 {/* 标签 */}
@@ -445,12 +440,12 @@ export default function AdminSearchConfigClient() {
                   </button>
                 </div>
               </form>
-            </div>
-          )}
+          </div>
+        )}
 
-          {/* 新建/编辑表单 */}
-          {showForm && (
-            <div className="mb-8 bg-[#1a1a1a] border border-white/10 rounded-2xl p-6">
+        {/* 新建/编辑表单 */}
+        {showForm && (
+          <div className="mb-8 bg-[#1a1a1a] border border-white/10 rounded-2xl p-6">
               <h2 className="text-xl font-semibold text-white mb-6">
                 {editingId ? '编辑配置' : '新建搜索配置'}
               </h2>
@@ -472,17 +467,12 @@ export default function AdminSearchConfigClient() {
                 {/* 调度 */}
                 <div>
                   <label className="block text-sm text-gray-400 mb-2">执行频率</label>
-                  <select
+                  <Dropdown
+                    options={scheduleOptions}
                     value={formData.cron_expr}
-                    onChange={(e) => setFormData({ ...formData, cron_expr: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#FF8C00]/50"
-                  >
-                    {scheduleOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value} className="bg-[#1a1a1a]">
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => setFormData({ ...formData, cron_expr: value })}
+                    size="md"
+                  />
                 </div>
 
                 {/* 标签 */}
@@ -559,99 +549,97 @@ export default function AdminSearchConfigClient() {
                   </button>
                 </div>
               </form>
-            </div>
-          )}
+          </div>
+        )}
 
-          {/* 配置列表 */}
-          {loading ? (
-            <div className="text-center py-20 text-gray-500">加载中...</div>
-          ) : configs.length === 0 ? (
-            <div className="text-center py-20">
-              <p className="text-gray-500 mb-4">还没有搜索配置</p>
-              <button
-                onClick={() => setShowForm(true)}
-                className="text-[#FF8C00] hover:underline"
+        {/* 配置列表 */}
+        {loading ? (
+          <div className="text-center py-20 text-gray-500">加载中...</div>
+        ) : configs.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-gray-500 mb-4">还没有搜索配置</p>
+            <button
+              onClick={() => setShowForm(true)}
+              className="text-[#FF8C00] hover:underline"
+            >
+              创建第一个配置
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {configs.map((config) => (
+              <div
+                key={config.id}
+                className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 hover:border-white/20 transition"
               >
-                创建第一个配置
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {configs.map((config) => (
-                <div
-                  key={config.id}
-                  className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 hover:border-white/20 transition"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-white">{config.keyword}</h3>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs ${
-                            config.enabled
-                              ? 'bg-green-500/20 text-green-400'
-                              : 'bg-gray-500/20 text-gray-400'
-                          }`}
-                        >
-                          {config.enabled ? '运行中' : '已停止'}
-                        </span>
-                      </div>
-                      {config.tags && config.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {config.tags.map((tag, idx) => (
-                            <span key={idx} className="px-2 py-0.5 bg-[#FF8C00]/10 text-[#FF8C00] text-xs rounded-full">
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                        <span>📅 {scheduleOptions.find((s) => s.value === config.cron_expr)?.label || config.cron_expr}</span>
-                        <span>🕐 上次运行: {formatTime(config.last_run_at)}</span>
-                        {config.last_result && (
-                          <span className="text-gray-400">📊 {config.last_result}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleRun(config.id)}
-                        disabled={runningId === config.id}
-                        className="px-4 py-2 bg-[#00E5FF]/10 text-[#00E5FF] rounded-lg hover:bg-[#00E5FF]/20 disabled:opacity-50 transition text-sm"
-                      >
-                        {runningId === config.id ? '运行中...' : '▶ 手动运行'}
-                      </button>
-                      <button
-                        onClick={() => handleToggle(config)}
-                        className={`px-4 py-2 rounded-lg text-sm transition ${
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-semibold text-white">{config.keyword}</h3>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs ${
                           config.enabled
-                            ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20'
-                            : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-gray-500/20 text-gray-400'
                         }`}
                       >
-                        {config.enabled ? '⏸ 暂停' : '▶ 启用'}
-                      </button>
-                      <button
-                        onClick={() => handleEdit(config)}
-                        className="px-4 py-2 bg-white/5 text-gray-300 rounded-lg hover:bg-white/10 transition text-sm"
-                      >
-                        ✏️ 编辑
-                      </button>
-                      <button
-                        onClick={() => handleDelete(config.id)}
-                        className="px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition text-sm"
-                      >
-                        🗑
-                      </button>
+                        {config.enabled ? '运行中' : '已停止'}
+                      </span>
+                    </div>
+                    {config.tags && config.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {config.tags.map((tag, idx) => (
+                          <span key={idx} className="px-2 py-0.5 bg-[#FF8C00]/10 text-[#FF8C00] text-xs rounded-full">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                      <span>📅 {scheduleOptions.find((s) => s.value === config.cron_expr)?.label || config.cron_expr}</span>
+                      <span>🕐 上次运行: {formatTime(config.last_run_at)}</span>
+                      {config.last_result && (
+                        <span className="text-gray-400">📊 {config.last_result}</span>
+                      )}
                     </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleRun(config.id)}
+                      disabled={runningId === config.id}
+                      className="px-4 py-2 bg-[#00E5FF]/10 text-[#00E5FF] rounded-lg hover:bg-[#00E5FF]/20 disabled:opacity-50 transition text-sm"
+                    >
+                      {runningId === config.id ? '运行中...' : '▶ 手动运行'}
+                    </button>
+                    <button
+                      onClick={() => handleToggle(config)}
+                      className={`px-4 py-2 rounded-lg text-sm transition ${
+                        config.enabled
+                          ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20'
+                          : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
+                      }`}
+                    >
+                      {config.enabled ? '⏸ 暂停' : '▶ 启用'}
+                    </button>
+                    <button
+                      onClick={() => handleEdit(config)}
+                      className="px-4 py-2 bg-white/5 text-gray-300 rounded-lg hover:bg-white/10 transition text-sm"
+                    >
+                      ✏️ 编辑
+                    </button>
+                    <button
+                      onClick={() => handleDelete(config.id)}
+                      className="px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition text-sm"
+                    >
+                      🗑
+                    </button>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </main>
-      <Footer />
-    </AdminGuard>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </AdminLayout>
   );
 }

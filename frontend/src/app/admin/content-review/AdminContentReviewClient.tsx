@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Navigation from '@/components/Navigation';
-import Footer from '@/components/Footer';
-import AdminGuard from '@/components/AdminGuard';
+import AdminLayout from '@/components/admin/AdminLayout';
 import { useAuth } from '@/lib/auth-context';
 
 const API_BASE = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
@@ -189,108 +187,97 @@ export default function AdminContentReviewClient() {
   ];
 
   return (
-    <AdminGuard>
-      <Navigation />
-      <main className="min-h-screen bg-[#0a0a0a] pt-24 pb-16">
-        <div className="max-w-7xl mx-auto px-6">
-          {/* 头部 */}
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">📝 内容审核</h1>
-              <p className="text-gray-400">审核和管理创业洞察内容</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <Link
-                href="/admin/search-config"
-                className="px-4 py-2 text-gray-400 hover:text-white transition"
-              >
-                🔍 搜索配置
-              </Link>
-              {selectedIds.size > 0 && (
-                <button
-                  onClick={handleBatchDelete}
-                  className="px-6 py-3 bg-red-500 text-white font-semibold rounded-xl hover:bg-red-600 transition"
-                >
-                  🗑 删除选中 ({selectedIds.size})
-                </button>
-              )}
-              {activeTab === 'pending' && contents.length > 0 && (
-                <button
-                  onClick={handleBatchPublish}
-                  className="px-6 py-3 bg-green-500 text-white font-semibold rounded-xl hover:bg-green-600 transition"
-                >
-                  ✅ 全部发布 ({contents.length})
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* 提示消息 */}
-          {message && (
-            <div className="mb-6 p-4 bg-[#FF8C00]/10 border border-[#FF8C00]/30 rounded-xl text-[#FF8C00]">
-              {message}
-            </div>
-          )}
-
-          {/* Tab 切换 */}
-          <div className="flex gap-2 mb-6 border-b border-white/10 pb-4">
-            {tabs.map((tab) => (
+    <AdminLayout title="内容审核">
+      <div>
+        {/* 头部 */}
+        <div className="flex items-center justify-between mb-6">
+          <p className="text-gray-400">审核和管理创业洞察内容</p>
+          <div className="flex items-center gap-4">
+            {selectedIds.size > 0 && (
               <button
-                key={tab.key}
-                onClick={() => {
-                  setActiveTab(tab.key);
-                  setPage(1);
-                  setSelectedContent(null);
-                }}
-                className={`px-6 py-3 rounded-xl transition flex items-center gap-2 ${
-                  activeTab === tab.key
-                    ? 'bg-[#FF8C00] text-black font-semibold'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                }`}
+                onClick={handleBatchDelete}
+                className="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition text-sm"
               >
-                <span>{tab.icon}</span>
-                <span>{tab.label}</span>
+                🗑 删除选中 ({selectedIds.size})
               </button>
-            ))}
+            )}
+            {activeTab === 'pending' && contents.length > 0 && (
+              <button
+                onClick={handleBatchPublish}
+                className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition text-sm"
+              >
+                ✅ 全部发布 ({contents.length})
+              </button>
+            )}
           </div>
+        </div>
 
-          <div className="grid lg:grid-cols-2 gap-6">
-            {/* 左侧：列表 */}
-            <div className="space-y-4">
-              {loading ? (
-                <div className="text-center py-20 text-gray-500">加载中...</div>
-              ) : contents.length === 0 ? (
-                <div className="text-center py-20 text-gray-500">
-                  暂无{tabs.find((t) => t.key === activeTab)?.label}内容
+        {/* 提示消息 */}
+        {message && (
+          <div className="mb-6 p-4 bg-[#FF8C00]/10 border border-[#FF8C00]/30 rounded-xl text-[#FF8C00]">
+            {message}
+          </div>
+        )}
+
+        {/* Tab 切换 */}
+        <div className="flex gap-2 mb-6 border-b border-white/10 pb-4">
+          {tabs.map((tab) => (
+          <button
+              key={tab.key}
+              onClick={() => {
+                setActiveTab(tab.key);
+                setPage(1);
+                setSelectedContent(null);
+              }}
+              className={`px-6 py-3 rounded-xl transition flex items-center gap-2 ${
+                activeTab === tab.key
+                  ? 'bg-[#FF8C00] text-black font-semibold'
+                  : 'bg-white/5 text-gray-400 hover:bg-white/10'
+              }`}
+            >
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* 左侧：列表 */}
+          <div className="space-y-4">
+            {loading ? (
+              <div className="text-center py-20 text-gray-500">加载中...</div>
+            ) : contents.length === 0 ? (
+              <div className="text-center py-20 text-gray-500">
+                暂无{tabs.find((t) => t.key === activeTab)?.label}内容
+              </div>
+            ) : (
+              <>
+                {/* 全选按钮 */}
+                <div className="flex items-center gap-3 mb-2">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 text-sm rounded-lg transition"
+                  >
+                    <span className={`w-4 h-4 border rounded flex items-center justify-center ${
+                      selectedIds.size === contents.length && contents.length > 0
+                        ? 'bg-[#FF8C00] border-[#FF8C00]'
+                        : 'border-gray-500'
+                    }`}>
+                      {selectedIds.size === contents.length && contents.length > 0 && '✓'}
+                    </span>
+                    {selectedIds.size === contents.length ? '取消全选' : '全选'}
+                  </button>
+                  {selectedIds.size > 0 && (
+                    <span className="text-gray-500 text-sm">已选择 {selectedIds.size} 项</span>
+                  )}
                 </div>
-              ) : (
-                <>
-                  {/* 全选按钮 */}
-                  <div className="flex items-center gap-3 mb-2">
-                    <button
-                      onClick={toggleSelectAll}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 text-sm rounded-lg transition"
-                    >
-                      <span className={`w-4 h-4 border rounded flex items-center justify-center ${
-                        selectedIds.size === contents.length && contents.length > 0
-                          ? 'bg-[#FF8C00] border-[#FF8C00]'
-                          : 'border-gray-500'
-                      }`}>
-                        {selectedIds.size === contents.length && contents.length > 0 && '✓'}
-                      </span>
-                      {selectedIds.size === contents.length ? '取消全选' : '全选'}
-                    </button>
-                    {selectedIds.size > 0 && (
-                      <span className="text-gray-500 text-sm">已选择 {selectedIds.size} 项</span>
-                    )}
-                  </div>
 
-                  {contents.map((content) => (
-                    <div
-                      key={content.id}
-                      className={`bg-[#1a1a1a] border rounded-xl p-4 transition ${
-                        selectedContent?.id === content.id
-                          ? 'border-[#FF8C00]'
+                {contents.map((content) => (
+                  <div
+                    key={content.id}
+                    className={`bg-[#1a1a1a] border rounded-xl p-4 transition ${
+                      selectedContent?.id === content.id
+                        ? 'border-[#FF8C00]'
                           : selectedIds.has(content.id)
                           ? 'border-[#FF8C00]/50'
                           : 'border-white/10 hover:border-white/20'
@@ -377,10 +364,10 @@ export default function AdminContentReviewClient() {
                   )}
                 </>
               )}
-            </div>
+          </div>
 
-            {/* 右侧：详情预览 */}
-            <div className="lg:sticky lg:top-24 lg:self-start">
+          {/* 右侧：详情预览 */}
+          <div className="lg:sticky lg:top-24 lg:self-start">
               {selectedContent ? (
                 <div className="bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden">
                   <div className="p-6 border-b border-white/5">
@@ -511,11 +498,9 @@ export default function AdminContentReviewClient() {
                   ← 选择一条内容查看详情
                 </div>
               )}
-            </div>
           </div>
         </div>
-      </main>
-      <Footer />
-    </AdminGuard>
+      </div>
+    </AdminLayout>
   );
 }

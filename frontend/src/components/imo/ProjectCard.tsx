@@ -2,31 +2,49 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Project, CHAIN_CONFIG } from "@/types/imo";
+import { Project, CHAIN_CONFIG, EvaluationGrade } from "@/types/imo";
 import ChainIcon from "./ChainIcon";
 import StatusBadge from "./StatusBadge";
 import VerificationBadges from "./VerificationBadges";
+import { EvaluationSummaryBadge } from "./EvaluationBadge";
 
 interface ProjectCardProps {
   project: Project;
+  evaluation?: {
+    overall_grade: EvaluationGrade;
+    summary: string;
+  } | null;
 }
 
-export default function ProjectCard({ project }: ProjectCardProps) {
+export default function ProjectCard({ project, evaluation }: ProjectCardProps) {
   const {
     ticker,
     name,
     logo,
     chain,
     status,
-    firstBuyAmount,
-    launchedAt,
-    verification,
+    current_bid_amount,
+    bid_count,
+    discovered_at,
+    launched_at,
+    verify_twitter,
+    verify_github,
+    verify_website,
+    verify_official,
   } = project;
 
   const chainConfig = CHAIN_CONFIG[chain];
 
+  // 构建验证对象
+  const verification = {
+    twitter: verify_twitter || false,
+    github: verify_github || false,
+    website: verify_website || false,
+    official: verify_official || false,
+  };
+
   // 根据链类型获取样式
-  const chainStyles = {
+  const chainStyles: Record<string, { hoverBorder: string; amountColor: string }> = {
     solana: {
       hoverBorder: 'hover:border-[#9945FF]/50',
       amountColor: 'text-sol',
@@ -35,9 +53,13 @@ export default function ProjectCard({ project }: ProjectCardProps) {
       hoverBorder: 'hover:border-[#F0B90B]/50',
       amountColor: 'text-bnb',
     },
+    default: {
+      hoverBorder: 'hover:border-white/30',
+      amountColor: 'text-gray-400',
+    },
   };
 
-  const style = chainStyles[chain] || chainStyles.solana;
+  const style = (chain && chainStyles[chain]) || chainStyles.default;
 
   // 格式化时间
   function formatTimeAgo(dateStr?: string): string {
@@ -90,29 +112,50 @@ export default function ProjectCard({ project }: ProjectCardProps) {
         <ChainIcon chain={chain} size="sm" />
       </div>
       
-      {/* Status & Verification */}
+      {/* Status & Verification & Evaluation */}
       <div className="flex items-center justify-between mb-3">
-        <StatusBadge status={status} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={status} />
+          {evaluation && (
+            <EvaluationSummaryBadge 
+              grade={evaluation.overall_grade} 
+              summary={evaluation.summary}
+            />
+          )}
+        </div>
         <VerificationBadges verification={verification} size="sm" />
       </div>
       
-      {/* Launch Info */}
+      {/* Info based on status */}
       <div className="border-t border-white/5 pt-3">
         {status === 'launching' ? (
           <div className="text-center">
             <p className="text-[#00E5FF] font-bold animate-pulse">发射中...</p>
           </div>
-        ) : (
+        ) : status === 'discovering' || status === 'auctioning' ? (
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">伯乐首单</p>
+              <p className="text-xs text-gray-500 mb-0.5">当前出价</p>
               <p className={`font-bold ${style.amountColor}`}>
-                {firstBuyAmount ? `${firstBuyAmount} ${chainConfig.currency}` : '—'}
+                {current_bid_amount && current_bid_amount > 0 
+                  ? `${current_bid_amount} ${chainConfig?.currency || 'SOL'}` 
+                  : '暂无出价'}
               </p>
             </div>
             <div className="text-right">
+              <p className="text-xs text-gray-500 mb-0.5">出价次数</p>
+              <p className="text-white font-medium text-sm">{bid_count || 0} 次</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-500 mb-0.5">发掘时间</p>
+              <p className="text-white font-medium text-sm">{formatTimeAgo(discovered_at)}</p>
+            </div>
+            <div className="text-right">
               <p className="text-xs text-gray-500 mb-0.5">发射时间</p>
-              <p className="text-white font-medium text-sm">{formatTimeAgo(launchedAt)}</p>
+              <p className="text-white font-medium text-sm">{formatTimeAgo(launched_at)}</p>
             </div>
           </div>
         )}

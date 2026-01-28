@@ -106,7 +106,7 @@ type PromoCode struct {
 	Used      bool          `json:"used" gorm:"default:false"`                         // 是否已使用
 	UsedBy    *string       `json:"used_by" gorm:"type:uuid"`                          // 使用者用户 ID
 	UsedAt    *time.Time    `json:"used_at"`                                           // 使用时间
-	CreatedBy string        `json:"created_by" gorm:"type:uuid"`                       // 创建者（管理员）
+	CreatedBy *string       `json:"created_by" gorm:"type:uuid"`                       // 创建者（管理员）
 	Note      string        `json:"note" gorm:"type:text"`                             // 备注
 
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`

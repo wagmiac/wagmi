@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Sidebar, useSidebar } from "@/components/imo";
-import { useWallet } from "@/lib/wallet/WalletProvider";
+import { useWallet } from "@/lib/wallet/MultiWalletProvider";
 import { Project } from "@/types/imo";
 import { getProjectByTicker, submitClaimRequest } from "@/lib/api/imo";
 
@@ -52,9 +52,10 @@ export default function ClaimPage() {
           setVerificationCode(code);
           
           // 检查是否已认领
-          if (proj.claimStatus === "claimed") {
+          if (proj.verify_official) {
             setStep("success");
-          } else if (proj.claimStatus === "pending") {
+          } else if (proj.creator_id) {
+            // 有创作者 ID 但未官方验证，可能是待审核状态
             setStep("pending");
           } else {
             setStep("info");

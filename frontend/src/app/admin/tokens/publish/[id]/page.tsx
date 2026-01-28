@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import Image from "next/image";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { useToast } from "@/components/ui/Toast";
 
 interface Token {
   id: string;
@@ -24,6 +25,7 @@ interface Token {
 export default function PublishTokenPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
   const router = useRouter();
   const { user } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [token, setToken] = useState<Token | null>(null);
@@ -78,7 +80,7 @@ export default function PublishTokenPage({ params }: { params: Promise<{ id: str
     e.preventDefault();
 
     if (!formData.contract_address) {
-      alert('请输入合约地址');
+      toast.warning('请输入合约地址');
       return;
     }
 
@@ -104,11 +106,11 @@ export default function PublishTokenPage({ params }: { params: Promise<{ id: str
         throw new Error(data.error || 'Failed to publish token');
       }
       
-      alert('代币发布成功！');
+      toast.success('代币发布成功！');
       router.push('/admin/tokens');
     } catch (error) {
       console.error('Failed to publish token:', error);
-      alert('发布失败: ' + (error instanceof Error ? error.message : '未知错误'));
+      toast.error('发布失败: ' + (error instanceof Error ? error.message : '未知错误'));
     } finally {
       setSubmitting(false);
     }

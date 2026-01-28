@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Sidebar, ProjectCard, useSidebar } from "@/components/imo";
-import { mockProjects } from "@/lib/mock-data";
-import { useWallet } from "@/lib/wallet/WalletProvider";
+import { useWallet } from "@/lib/wallet/MultiWalletProvider";
 import { getUserRevenue, getUserProjects } from "@/lib/api/imo";
 import { Project } from "@/types/imo";
+import { useAuth, isAdmin } from "@/lib/auth-context";
 
 type Tab = "discovered" | "launched" | "revenue";
 
@@ -34,24 +34,25 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
 
 export default function MyPage() {
   const [activeTab, setActiveTab] = useState<Tab>("discovered");
-  const { address, isConnected, connect, chain } = useWallet();
+  const { address, primaryAddress, allAddresses, isConnected, connect, chain } = useWallet();
+  const { user } = useAuth();
   const [revenueData, setRevenueData] = useState<RevenueData | null>(null);
   const [scoutedProjects, setScoutedProjects] = useState<Project[]>([]);
   const [launchedProjects, setLaunchedProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const { sidebarWidth } = useSidebar();
 
-  // 加载用户数据
+  // 加载用户数据 - 使用主钱包地址查询
   useEffect(() => {
-    if (!isConnected || !address) return;
+    if (!isConnected || !primaryAddress) return;
 
     async function loadUserData() {
       setLoading(true);
       try {
-        // 并行加载所有数据
+        // 使用主钱包地址查询，同时传递所有绑定的钱包地址
         const [scoutedRes, launchedRes] = await Promise.all([
-          getUserProjects(address!, "scouted"),
-          getUserProjects(address!, "launched"),
+          getUserProjects(primaryAddress!, "scouted", allAddresses),
+          getUserProjects(primaryAddress!, "launched", allAddresses),
         ]);
 
         if (scoutedRes.success && scoutedRes.data) {
@@ -68,34 +69,26 @@ export default function MyPage() {
     }
 
     loadUserData();
-  }, [isConnected, address]);
+  }, [isConnected, primaryAddress]);
 
   // 加载收益数据
   useEffect(() => {
-    if (!isConnected || !address || activeTab !== "revenue") return;
+    if (!isConnected || !primaryAddress || activeTab !== "revenue") return;
 
     setLoading(true);
-    getUserRevenue(address)
+    getUserRevenue(primaryAddress)
       .then((res) => {
         if (res.success && res.data) {
           setRevenueData(res.data as RevenueData);
         }
       })
       .finally(() => setLoading(false));
-  }, [isConnected, address, activeTab]);
+  }, [isConnected, primaryAddress, activeTab]);
 
-  // 使用 mock 数据 fallback（开发环境）
-  const myDiscoveredProjects = useMemo(() => {
-    if (scoutedProjects.length > 0) return scoutedProjects;
-    // Fallback to mock
-    return mockProjects.filter((p) => p.scoutWallet === "7xKXtg...");
-  }, [scoutedProjects]);
+  // 直接使用后端数据，不再 fallback 到 mock
+  const myDiscoveredProjects = scoutedProjects;
 
-  const myLaunchedProjects = useMemo(() => {
-    if (launchedProjects.length > 0) return launchedProjects;
-    // Fallback to mock
-    return mockProjects.filter((p) => p.status === "launched");
-  }, [launchedProjects]);
+  const myLaunchedProjects = launchedProjects;
 
   return (
     <div className="flex min-h-screen bg-[#0a0a0a]">
@@ -139,6 +132,16 @@ export default function MyPage() {
                   )}
                 </div>
               </div>
+              {/* 管理员入口 */}
+              {isAdmin(user) && (
+                <Link
+                  href="/admin"
+                  className="w-full sm:w-auto px-4 py-2 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-500 transition flex items-center gap-2 justify-center"
+                >
+                  <span>🎛️</span>
+                  <span>管理后台</span>
+                </Link>
+              )}
               {!isConnected && (
                 <button
                   onClick={() => connect("phantom")}

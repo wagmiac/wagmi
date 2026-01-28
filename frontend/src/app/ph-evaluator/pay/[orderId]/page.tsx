@@ -7,6 +7,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
+import { useToast } from "@/components/ui/Toast";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -44,6 +45,7 @@ export default function PaymentPage() {
   const router = useRouter();
   const { locale } = useI18n();
   const { token } = useAuth();
+  const toast = useToast();
 
   const orderId = params.orderId as string;
 
@@ -134,7 +136,7 @@ export default function PaymentPage() {
   // 手动确认支付（测试用）
   const confirmPayment = async () => {
     if (!txHash.trim()) {
-      alert(locale === "zh" ? "请输入交易哈希" : "Please enter transaction hash");
+      toast.warning(locale === "zh" ? "请输入交易哈希" : "Please enter transaction hash");
       return;
     }
 
@@ -159,7 +161,7 @@ export default function PaymentPage() {
 
       await fetchOrder();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Confirmation failed");
+      toast.error(err instanceof Error ? err.message : "Confirmation failed");
     } finally {
       setConfirming(false);
     }

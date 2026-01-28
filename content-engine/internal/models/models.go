@@ -297,7 +297,7 @@ func AutoMigrate(db *gorm.DB) error {
 	}
 
 	// IMO 相关表
-	if err := db.AutoMigrate(&Project{}, &Bid{}, &TimelineEvent{}, &IMOUser{}, &RevenueRecord{}, &ClaimRequest{}); err != nil {
+	if err := db.AutoMigrate(&Project{}, &Bid{}, &TimelineEvent{}, &IMOUser{}, &RevenueRecord{}, &ClaimRequest{}, &ProjectEvaluation{}, &ProjectComment{}, &LaunchOrder{}); err != nil {
 		return err
 	}
 

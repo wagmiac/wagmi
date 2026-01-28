@@ -54,6 +54,8 @@ type Config struct {
 	PlatformWallet      string // 平台收款钱包
 	SolanaRPC           string // Solana RPC 节点
 	BSCRPC              string // BSC RPC 节点
+	LaunchServiceURL    string // Launch Service 微服务地址
+	LaunchServiceSecret string // Launch Service API 密钥
 }
 
 func Load() *Config {
@@ -86,6 +88,8 @@ func Load() *Config {
 		PlatformWallet:        getEnv("PLATFORM_WALLET", ""),
 		SolanaRPC:             getEnv("SOLANA_RPC", "https://api.mainnet-beta.solana.com"),
 		BSCRPC:                getEnv("BSC_RPC", "https://bsc-dataseed.binance.org"),
+		LaunchServiceURL:      getEnv("LAUNCH_SERVICE_URL", "http://localhost:3001"),
+		LaunchServiceSecret:   getEnv("LAUNCH_SERVICE_SECRET", "wagmi-launch-service-secret-2026"),
 	}
 }
 

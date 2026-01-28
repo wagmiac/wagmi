@@ -28,7 +28,8 @@ func (h *SettingHandler) List(c *gin.Context) {
 
 // UpdateSettingRequest 更新配置请求
 type UpdateSettingRequest struct {
-	Value string `json:"value" binding:"required"`
+	Value       string `json:"value" binding:"required"`
+	Description string `json:"description"`
 }
 
 // Update 更新配置
@@ -41,7 +42,7 @@ func (h *SettingHandler) Update(c *gin.Context) {
 		return
 	}
 
-	if err := h.repo.Update(key, req.Value); err != nil {
+	if err := h.repo.Upsert(key, req.Value, req.Description); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}

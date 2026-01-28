@@ -7,6 +7,7 @@ import Footer from '@/components/Footer';
 import { useAuth } from '@/lib/auth-context';
 import { InsightContent } from '@/lib/content-api';
 import InsightCard from '@/components/InsightCard';
+import { useToast } from '@/components/ui/Toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
 
@@ -17,6 +18,7 @@ interface PopularTag {
 
 export default function FeedPage() {
   const { user, token } = useAuth();
+  const toast = useToast();
   const [contents, setContents] = useState<InsightContent[]>([]);
   const [subscriptions, setSubscriptions] = useState<string[]>([]);
   const [popularTags, setPopularTags] = useState<PopularTag[]>([]);
@@ -77,7 +79,7 @@ export default function FeedPage() {
 
   const handleSubscribe = async (tag: string) => {
     if (!token) {
-      alert('请先登录');
+      toast.warning('请先登录');
       return;
     }
     try {

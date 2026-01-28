@@ -1,21 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { I18nProvider } from "@/lib/i18n";
 import { NotificationProvider, AnnouncementBanner } from "@/components/notifications";
 import { NotificationProvider as IMONotificationProvider } from "@/components/imo/NotificationContext";
 import AuthWrapper from "@/components/AuthWrapper";
-import { WalletProvider } from "@/lib/wallet/WalletProvider";
+import { MultiWalletProvider } from "@/lib/wallet/MultiWalletProvider";
 import { SidebarProvider } from "@/components/imo";
+import { ToastProvider } from "@/components/ui/Toast";
 
-const geistSans = Geist({
+// 使用 Inter 字体，替代 Geist（更稳定的 CDN）
+const inter = Inter({
   variable: "--font-geist-sans",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap", // 防止字体加载阻塞渲染
 });
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://wagmi.fun';
@@ -96,21 +94,23 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0a0a0a] text-white`}
+        className={`${inter.variable} antialiased bg-[#0a0a0a] text-white`}
       >
         <AuthWrapper>
-          <WalletProvider>
+          <MultiWalletProvider>
             <SidebarProvider>
               <I18nProvider>
                 <NotificationProvider>
                   <IMONotificationProvider>
-                    <AnnouncementBanner />
-                    {children}
+                    <ToastProvider>
+                      <AnnouncementBanner />
+                      {children}
+                    </ToastProvider>
                   </IMONotificationProvider>
                 </NotificationProvider>
               </I18nProvider>
             </SidebarProvider>
-          </WalletProvider>
+          </MultiWalletProvider>
         </AuthWrapper>
       </body>
     </html>

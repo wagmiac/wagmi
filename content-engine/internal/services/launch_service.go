@@ -1,18 +1,25 @@
 package services
 
 import (
+	"bytes"
 	"content-engine/internal/config"
 	"content-engine/internal/models"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ed25519"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
+	"sort"
+	"strconv"
 	"time"
 
 	"gorm.io/gorm"
@@ -34,20 +41,52 @@ type DevWalletInfo struct {
 	Address    string `json:"address"`
 	PublicKey  string `json:"publicKey"`
 	PrivateKey string `json:"-"` // 不返回给前端
+	Chain      string `json:"chain"`
+	Launchpad  string `json:"launchpad"`
 }
 
-// GenerateDevWallet 为项目生成Dev钱包
-func (s *LaunchService) GenerateDevWallet(projectID string, chain models.Chain) (*DevWalletInfo, error) {
+// 发射台对应的链
+var launchpadChainMap = map[string]models.Chain{
+	"pump.fun":   models.ChainSolana,
+	"trends.fun": models.ChainSolana,
+	"bags.fm":    models.ChainSolana,
+	"four.meme":  models.ChainBSC,
+	"flap.sh":    models.ChainBSC,
+}
+
+// GenerateDevWallet 为项目的指定发射台生成 Dev 钱包
+func (s *LaunchService) GenerateDevWallet(projectID string, launchpad string) (*DevWalletInfo, error) {
 	var project models.Project
 	if err := s.db.First(&project, "id = ?", projectID).Error; err != nil {
 		return nil, err
 	}
 
-	// 如果已有Dev钱包，返回错误
-	if project.DevWalletAddress != "" {
-		return nil, errors.New("dev wallet already exists")
+	// 获取发射台对应的链
+	chain, ok := launchpadChainMap[launchpad]
+	if !ok {
+		return nil, errors.New("unsupported launchpad: " + launchpad)
 	}
 
+	// 初始化钱包 map
+	if project.LaunchpadWallets == nil {
+		project.LaunchpadWallets = make(models.JSONMap)
+	}
+	if project.LaunchpadKeys == nil {
+		project.LaunchpadKeys = make(models.JSONMap)
+	}
+
+	// 检查该发射台的钱包是否已存在
+	if addr, exists := project.LaunchpadWallets[launchpad]; exists && addr != nil {
+		if addrStr, ok := addr.(string); ok && addrStr != "" {
+			return &DevWalletInfo{
+				Address:   addrStr,
+				Chain:     string(chain),
+				Launchpad: launchpad,
+			}, nil
+		}
+	}
+
+	// 根据链生成对应格式的钱包
 	var wallet *DevWalletInfo
 	var err error
 
@@ -64,15 +103,24 @@ func (s *LaunchService) GenerateDevWallet(projectID string, chain models.Chain) 
 		return nil, err
 	}
 
+	wallet.Chain = string(chain)
+	wallet.Launchpad = launchpad
+
 	// 加密私钥存储
 	encryptedKey, err := s.encryptPrivateKey(wallet.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	// 更新项目
-	project.DevWalletAddress = wallet.Address
-	project.DevWalletKey = encryptedKey
+	// 保存到发射台钱包 map
+	project.LaunchpadWallets[launchpad] = wallet.Address
+	project.LaunchpadKeys[launchpad] = encryptedKey
+
+	// 兼容旧字段
+	if project.DevWalletAddress == "" {
+		project.DevWalletAddress = wallet.Address
+		project.DevWalletKey = encryptedKey
+	}
 
 	if err := s.db.Save(&project).Error; err != nil {
 		return nil, err
@@ -199,6 +247,28 @@ func (s *LaunchService) getEncryptionKey() []byte {
 	return key[:32]
 }
 
+// ExportDevWalletKey 导出指定发射台的 Dev 钱包私钥（仅管理员使用）
+func (s *LaunchService) ExportDevWalletKey(projectID string, launchpad string) (string, error) {
+	var project models.Project
+	if err := s.db.First(&project, "id = ?", projectID).Error; err != nil {
+		return "", err
+	}
+
+	// 优先从 LaunchpadKeys 获取
+	if project.LaunchpadKeys != nil {
+		if encryptedKey, ok := project.LaunchpadKeys[launchpad].(string); ok && encryptedKey != "" {
+			return s.decryptPrivateKey(encryptedKey)
+		}
+	}
+
+	// 兼容旧数据：如果是默认发射台且有旧的 DevWalletKey
+	if project.DevWalletKey != "" && string(project.Launchpad) == launchpad {
+		return s.decryptPrivateKey(project.DevWalletKey)
+	}
+
+	return "", errors.New("wallet key not found for launchpad: " + launchpad)
+}
+
 // LaunchRequest 发射请求
 type LaunchRequest struct {
 	ProjectID string  `json:"projectId"`
@@ -286,22 +356,11 @@ func (s *LaunchService) LaunchToken(req LaunchRequest) (*LaunchResult, error) {
 func (s *LaunchService) launchOnSolana(project *models.Project, privateKey string, req LaunchRequest) (*LaunchResult, error) {
 	log.Printf("Launching %s on Solana via %s", project.Ticker, project.Launchpad)
 
-	// TODO: 实际实现需要：
-	// 1. 连接到 Solana RPC
-	// 2. 根据 launchpad 调用不同的发射逻辑
-	// 3. 使用 Jito Bundle 发送交易
-
-	// 模拟发射结果（开发测试用）
-	result := &LaunchResult{
-		Success:      true,
-		TokenAddress: fmt.Sprintf("So%s...%s", project.Ticker[:3], randomHex(6)),
-		LaunchTxHash: randomHex(64),
-	}
-
-	// 模拟 Dev 买入
-	if req.DevBuySOL > 0 {
-		result.DevBuyTxHash = randomHex(64)
-		log.Printf("Dev buy %.4f SOL, tx: %s", req.DevBuySOL, result.DevBuyTxHash)
+	// 调用 launch-service 微服务
+	result, err := s.callLaunchService(project, privateKey, req.DevBuySOL)
+	if err != nil {
+		log.Printf("Launch service call failed: %v", err)
+		return nil, err
 	}
 
 	return result, nil
@@ -311,25 +370,178 @@ func (s *LaunchService) launchOnSolana(project *models.Project, privateKey strin
 func (s *LaunchService) launchOnBSC(project *models.Project, privateKey string, req LaunchRequest) (*LaunchResult, error) {
 	log.Printf("Launching %s on BSC via %s", project.Ticker, project.Launchpad)
 
-	// TODO: 实际实现需要：
-	// 1. 连接到 BSC RPC
-	// 2. 调用 flap.sh 合约
-	// 3. 发送交易
-
-	// 模拟发射结果（开发测试用）
-	result := &LaunchResult{
-		Success:      true,
-		TokenAddress: "0x" + randomHex(40),
-		LaunchTxHash: "0x" + randomHex(64),
-	}
-
-	// 模拟 Dev 买入
-	if req.DevBuyBNB > 0 {
-		result.DevBuyTxHash = "0x" + randomHex(64)
-		log.Printf("Dev buy %.4f BNB, tx: %s", req.DevBuyBNB, result.DevBuyTxHash)
+	// 调用 launch-service 微服务
+	result, err := s.callLaunchService(project, privateKey, req.DevBuyBNB)
+	if err != nil {
+		log.Printf("Launch service call failed: %v", err)
+		return nil, err
 	}
 
 	return result, nil
+}
+
+// LaunchServiceRequest 发射服务请求
+type LaunchServiceRequest struct {
+	Launchpad         string                 `json:"launchpad"`
+	Metadata          map[string]interface{} `json:"metadata"`
+	CreatorPrivateKey string                 `json:"creatorPrivateKey"`
+	InitialBuyAmount  float64                `json:"initialBuyAmount,omitempty"`
+}
+
+// LaunchServiceResponse 发射服务响应
+type LaunchServiceResponse struct {
+	Success      bool   `json:"success"`
+	TokenAddress string `json:"tokenAddress,omitempty"`
+	CreateTxHash string `json:"createTxHash,omitempty"`
+	BuyTxHash    string `json:"buyTxHash,omitempty"`
+	PumpFunUrl   string `json:"pumpFunUrl,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
+// callLaunchService 调用 launch-service 微服务
+func (s *LaunchService) callLaunchService(project *models.Project, privateKey string, initialBuyAmount float64) (*LaunchResult, error) {
+	// 构建请求
+	reqBody := LaunchServiceRequest{
+		Launchpad:         string(project.Launchpad),
+		CreatorPrivateKey: privateKey,
+		InitialBuyAmount:  initialBuyAmount,
+		Metadata: map[string]interface{}{
+			"name":        project.Name,
+			"symbol":      project.Ticker,
+			"description": project.Description,
+			"image":       project.Logo,
+			"twitter":     project.Twitter,
+			"telegram":    project.Discord, // 使用 Discord 作为社区链接
+			"website":     project.Website,
+		},
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// 获取 launch-service URL
+	launchServiceURL := s.cfg.LaunchServiceURL
+	if launchServiceURL == "" {
+		launchServiceURL = "http://localhost:3001"
+	}
+
+	// 生成 HMAC 签名
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	signature := s.generateLaunchServiceSignature(reqBody, timestamp)
+
+	// 创建请求
+	req, err := http.NewRequest("POST", launchServiceURL+"/api/create", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// 设置请求头
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Signature", signature)
+	req.Header.Set("X-Timestamp", timestamp)
+
+	// 发送请求
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call launch service: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 读取响应
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// 检查 HTTP 状态码
+	if resp.StatusCode == 401 {
+		return nil, fmt.Errorf("launch service authentication failed: %s", string(body))
+	}
+	if resp.StatusCode == 403 {
+		return nil, fmt.Errorf("launch service access denied: %s", string(body))
+	}
+	if resp.StatusCode == 429 {
+		return nil, fmt.Errorf("launch service rate limited: %s", string(body))
+	}
+
+	var launchResp LaunchServiceResponse
+	if err := json.Unmarshal(body, &launchResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if !launchResp.Success {
+		return &LaunchResult{
+			Success: false,
+			Error:   launchResp.Error,
+		}, nil
+	}
+
+	return &LaunchResult{
+		Success:      true,
+		TokenAddress: launchResp.TokenAddress,
+		LaunchTxHash: launchResp.CreateTxHash,
+		DevBuyTxHash: launchResp.BuyTxHash,
+	}, nil
+}
+
+// generateLaunchServiceSignature 生成 launch-service 请求签名
+func (s *LaunchService) generateLaunchServiceSignature(body interface{}, timestamp string) string {
+	// 将 body 序列化为 JSON（按 key 排序）
+	sortedJSON := sortedJSONMarshal(body)
+
+	// 拼接: timestamp.body
+	payload := timestamp + "." + string(sortedJSON)
+
+	// HMAC-SHA256
+	secret := s.cfg.LaunchServiceSecret
+	if secret == "" {
+		secret = "wagmi-launch-service-secret-2026"
+	}
+
+	h := hmac.New(sha256.New, []byte(secret))
+	h.Write([]byte(payload))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// sortedJSONMarshal 按 key 排序的 JSON 序列化
+func sortedJSONMarshal(v interface{}) []byte {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		keys := make([]string, 0, len(val))
+		for k := range val {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		result := "{"
+		for i, k := range keys {
+			if i > 0 {
+				result += ","
+			}
+			keyJSON, _ := json.Marshal(k)
+			valJSON := sortedJSONMarshal(val[k])
+			result += string(keyJSON) + ":" + string(valJSON)
+		}
+		result += "}"
+		return []byte(result)
+
+	case LaunchServiceRequest:
+		// 转换为 map 再排序
+		m := map[string]interface{}{
+			"creatorPrivateKey": val.CreatorPrivateKey,
+			"initialBuyAmount":  val.InitialBuyAmount,
+			"launchpad":         val.Launchpad,
+			"metadata":          val.Metadata,
+		}
+		return sortedJSONMarshal(m)
+
+	default:
+		data, _ := json.Marshal(v)
+		return data
+	}
 }
 
 // DistributeRevenue 分发收益

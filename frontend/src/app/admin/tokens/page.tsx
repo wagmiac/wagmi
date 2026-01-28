@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
-import Navigation from "@/components/Navigation";
-import Footer from "@/components/Footer";
+import AdminLayout from "@/components/admin/AdminLayout";
+import { useToast } from "@/components/ui/Toast";
 
 interface Token {
   id: string;
@@ -28,6 +28,7 @@ type TabType = 'all' | 'draft' | 'published';
 export default function AdminTokensPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const toast = useToast();
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('all');
@@ -71,10 +72,10 @@ export default function AdminTokensPage() {
       });
       if (!res.ok) throw new Error('Failed to delete');
       setTokens(tokens.filter(t => t.id !== id));
-      alert('删除成功');
+      toast.success('删除成功');
     } catch (error) {
       console.error('Failed to delete token:', error);
-      alert('删除失败');
+      toast.error('删除失败');
     }
   };
 
@@ -99,25 +100,20 @@ export default function AdminTokensPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
-      <Navigation />
-      <main className="flex-1">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">代币管理</h1>
-              <p className="text-gray-400">创建和管理代币</p>
-            </div>
-            <Link
-              href="/admin/tokens/create"
-              className="px-6 py-3 bg-[#FF8C00] text-white rounded-xl hover:bg-[#FF8C00]/90 transition font-medium"
-            >
-              ✨ 创建代币
-            </Link>
-          </div>
+    <AdminLayout title="代币管理">
+      <div>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <p className="text-gray-400">创建和管理代币</p>
+          <Link
+            href="/admin/tokens/create"
+            className="px-4 py-2 bg-[#FF8C00] text-white rounded-lg hover:bg-[#FF8C00]/90 transition font-medium text-sm"
+          >
+            ✨ 创建代币
+          </Link>
+        </div>
 
-          {/* Tabs */}
+        {/* Tabs */}
           <div className="flex gap-4 mb-6 border-b border-white/10">
             <button 
               onClick={() => setActiveTab('all')}
@@ -255,9 +251,7 @@ export default function AdminTokensPage() {
             ))}
           </div>
         )}
-        </div>
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </AdminLayout>
   );
 }

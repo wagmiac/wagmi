@@ -30,6 +30,11 @@ func main() {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
+	// 清理卡住的 is_evaluating 状态（服务重启时）
+	if result := db.Model(&models.Project{}).Where("is_evaluating = ?", true).Update("is_evaluating", false); result.RowsAffected > 0 {
+		log.Printf("🔧 已清理 %d 个卡住的评估状态", result.RowsAffected)
+	}
+
 	// 初始化各层
 	contentRepo := repository.NewContentRepository(db)
 	tagRepo := repository.NewTagRepository(db)
@@ -89,6 +94,9 @@ func main() {
 	// 发射服务
 	launchService := services.NewLaunchService(cfg, db)
 	launchHandler := handlers.NewLaunchHandler(launchService, db)
+
+	// IMO 评估服务
+	imoEvaluationService := services.NewIMOEvaluationService(cfg, db, aiService, settingRepo)
 
 	// 设置 Gin 模式
 	if cfg.GinMode == "release" {
@@ -351,16 +359,27 @@ func main() {
 		}
 
 		// ========== IMO API ==========
-		imoHandler := handlers.NewIMOHandler(db)
+		githubToken := settingRepo.GetValue("github_token")
+		githubService := services.NewGitHubService(githubToken)
+		imoHandler := handlers.NewIMOHandler(db, paymentService, imoEvaluationService, githubService)
+		imoEvaluationHandler := handlers.NewIMOEvaluationHandler(db, imoEvaluationService)
 		imo := api.Group("/imo")
 		{
 			// 公开接口
-			imo.GET("/projects", imoHandler.ListProjects)              // 获取项目列表
-			imo.GET("/projects/ticker/:ticker", imoHandler.GetProject) // 通过ticker获取项目
-			imo.GET("/projects/:id", imoHandler.GetProjectByID)        // 通过ID获取项目
-			imo.GET("/projects/:id/bids", imoHandler.GetBids)          // 获取项目出价历史
-			imo.GET("/projects/:id/timeline", imoHandler.GetTimeline)  // 获取项目时间线
-			imo.GET("/stats", imoHandler.GetStats)                     // 获取统计数据
+			imo.GET("/projects", imoHandler.ListProjects)                                   // 获取项目列表
+			imo.GET("/projects/ticker/:ticker", imoHandler.GetProject)                      // 通过ticker获取项目
+			imo.GET("/projects/:id", imoHandler.GetProjectByID)                             // 通过ID获取项目
+			imo.GET("/projects/:id/bids", imoHandler.GetBids)                               // 获取项目出价历史
+			imo.GET("/projects/:id/timeline", imoHandler.GetTimeline)                       // 获取项目时间线
+			imo.GET("/projects/:id/github", imoHandler.GetProjectGitHubStats)               // 获取项目GitHub热度数据
+			imo.POST("/projects/:id/github/refresh", imoHandler.RefreshProjectGitHubStats)  // 刷新项目GitHub热度数据
+			imo.GET("/projects/:id/comments", imoHandler.ListProjectComments)               // 获取项目评论列表
+			imo.GET("/projects/:id/evaluation", imoEvaluationHandler.GetProjectEvaluation)  // 获取项目评估
+			imo.GET("/projects/:id/evaluations", imoEvaluationHandler.GetEvaluationHistory) // 获取项目评估历史
+			imo.GET("/evaluations", imoEvaluationHandler.ListEvaluations)                   // 获取评估列表
+			imo.GET("/evaluations/:id", imoEvaluationHandler.GetEvaluationByID)             // 获取评估详情
+			imo.GET("/stats", imoHandler.GetStats)                                          // 获取统计数据
+			imo.GET("/promo/validate", imoHandler.ValidatePromoCode)                        // 验证免单码
 
 			// 钱包认证
 			imo.GET("/wallet/nonce", imoHandler.GetWalletNonce) // 获取签名 nonce
@@ -371,28 +390,47 @@ func main() {
 			imo.GET("/users/:userId/projects", imoHandler.GetUserProjects) // 获取用户的项目
 			imo.GET("/users/:userId/bids", imoHandler.GetUserBids)         // 获取用户的出价
 
-			// 需要钱包认证的接口（TODO: 添加钱包认证中间件）
-			imo.POST("/projects", imoHandler.CreateProject)                 // 创建项目（发掘）
-			imo.POST("/projects/:id/bids", imoHandler.PlaceBid)             // 出价
-			imo.POST("/projects/:id/claims", imoHandler.SubmitClaimRequest) // 提交认领申请
+			// 需要钱包认证的接口
+			imoAuth := imo.Group("")
+			imoAuth.Use(handlers.IMOWalletAuthMiddleware())
+			{
+				imoAuth.POST("/projects", imoHandler.CreateProject)                                  // 创建项目（发掘）
+				imoAuth.PUT("/projects/:id", imoHandler.UpdateProject)                               // 更新项目（伯乐/创作者/管理员）
+				imoAuth.POST("/projects/:id/bids", imoHandler.PlaceBid)                              // 出价
+				imoAuth.POST("/projects/:id/claims", imoHandler.SubmitClaimRequest)                  // 提交认领申请
+				imoAuth.POST("/projects/:id/evaluate", imoEvaluationHandler.TriggerEvaluation)       // 伯乐触发重新评估
+				imoAuth.POST("/projects/:id/comments", imoHandler.CreateProjectComment)              // 创建项目评论
+				imoAuth.DELETE("/projects/:id/comments/:commentId", imoHandler.DeleteProjectComment) // 删除项目评论
+			}
 
 			// 管理员接口（TODO: 添加管理员权限验证）
 			imoAdmin := imo.Group("/admin")
 			{
-				imoAdmin.POST("/projects/:id/start-auction", imoHandler.StartAuction)     // 开始竞拍
-				imoAdmin.POST("/projects/:id/end-auction", imoHandler.EndAuction)         // 结束竞拍
-				imoAdmin.POST("/projects/:id/launched", imoHandler.MarkLaunched)          // 标记已发射
-				imoAdmin.GET("/projects/:id/claims", imoHandler.GetClaimRequests)         // 获取认领申请
-				imoAdmin.POST("/claims/:claimId/approve", imoHandler.ApproveClaimRequest) // 批准认领
+				imoAdmin.POST("/projects/:id/start-auction", imoHandler.StartAuction)                // 开始竞拍
+				imoAdmin.POST("/projects/:id/end-auction", imoHandler.EndAuction)                    // 结束竞拍
+				imoAdmin.POST("/projects/:id/launched", imoHandler.MarkLaunched)                     // 标记已发射
+				imoAdmin.GET("/projects/:id/claims", imoHandler.GetClaimRequests)                    // 获取认领申请
+				imoAdmin.POST("/claims/:claimId/approve", imoHandler.ApproveClaimRequest)            // 批准认领
+				imoAdmin.POST("/projects/:id/evaluate", imoEvaluationHandler.AdminTriggerEvaluation) // 管理员触发评估
 
 				// 发射相关
 				imoAdmin.GET("/launching", launchHandler.ListLaunchingProjects)                 // 待发射项目
 				imoAdmin.POST("/projects/:id/generate-wallet", launchHandler.GenerateDevWallet) // 生成Dev钱包
 				imoAdmin.GET("/projects/:id/wallet", launchHandler.GetDevWallet)                // 获取Dev钱包
-				imoAdmin.POST("/projects/:id/launch", launchHandler.Launch)                     // 执行发射
+				imoAdmin.POST("/projects/:id/wallet/export", launchHandler.ExportDevWalletKey)  // 导出Dev钱包私钥
+				imoAdmin.POST("/projects/:id/launch", launchHandler.Launch)                     // 执行发射（旧流程）
 				imoAdmin.GET("/projects/:id/launch-status", launchHandler.GetLaunchStatus)      // 发射状态
 				imoAdmin.POST("/projects/:id/distribute", launchHandler.DistributeRevenue)      // 分发收益
 				imoAdmin.GET("/projects/:id/revenues", launchHandler.GetRevenueRecords)         // 分成记录
+
+				// 新发射流程
+				imoAdmin.POST("/projects/:id/launch-order", launchHandler.CreateLaunchOrder)        // 创建发射订单
+				imoAdmin.POST("/projects/:id/launch-with-payment", launchHandler.LaunchWithPayment) // 带支付哈希的直接发射
+				imoAdmin.GET("/projects/:id/launch-orders", launchHandler.GetProjectLaunchOrders)   // 获取项目发射订单列表
+				imoAdmin.GET("/launch-orders/:orderId", launchHandler.GetLaunchOrder)               // 获取发射订单详情
+				imoAdmin.GET("/launch-orders/:orderId/check-payment", launchHandler.CheckPayment)   // 检查支付状态
+				imoAdmin.POST("/launch-orders/:orderId/execute", launchHandler.ExecuteLaunch)       // 执行发射
+				imoAdmin.POST("/launch-orders/:orderId/cancel", launchHandler.CancelLaunchOrder)    // 取消订单
 			}
 
 			// 用户收益查询

@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import Image from "next/image";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { useToast } from "@/components/ui/Toast";
 
 interface Token {
   id: string;
@@ -24,6 +25,7 @@ interface Token {
 export default function EditTokenPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
   const router = useRouter();
   const { user } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [token, setToken] = useState<Token | null>(null);
@@ -113,7 +115,7 @@ export default function EditTokenPage({ params }: { params: Promise<{ id: string
     e.preventDefault();
     
     if (!formData.name || !formData.symbol) {
-      alert('请填写必填字段');
+      toast.warning('请填写必填字段');
       return;
     }
 
@@ -154,11 +156,11 @@ export default function EditTokenPage({ params }: { params: Promise<{ id: string
 
       if (!res.ok) throw new Error('Failed to update token');
       
-      alert('代币信息已更新');
+      toast.success('代币信息已更新');
       router.push('/admin/tokens');
     } catch (error) {
       console.error('Failed to update token:', error);
-      alert('更新失败');
+      toast.error('更新失败');
     } finally {
       setSubmitting(false);
     }

@@ -3,7 +3,6 @@ package models
 import (
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
 )
 
 // JSONArray 用于处理 PostgreSQL 的 JSONB 数组类型
@@ -16,9 +15,20 @@ func (j *JSONArray) Scan(value interface{}) error {
 		return nil
 	}
 
-	bytes, ok := value.([]byte)
-	if !ok {
-		return errors.New("type assertion to []byte failed")
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		*j = []string{}
+		return nil
+	}
+
+	if len(bytes) == 0 {
+		*j = []string{}
+		return nil
 	}
 
 	return json.Unmarshal(bytes, j)
@@ -42,9 +52,20 @@ func (j *JSONMap) Scan(value interface{}) error {
 		return nil
 	}
 
-	bytes, ok := value.([]byte)
-	if !ok {
-		return errors.New("type assertion to []byte failed")
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		*j = make(map[string]interface{})
+		return nil
+	}
+
+	if len(bytes) == 0 {
+		*j = make(map[string]interface{})
+		return nil
 	}
 
 	return json.Unmarshal(bytes, j)

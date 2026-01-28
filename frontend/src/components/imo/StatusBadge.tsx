@@ -8,6 +8,14 @@ interface StatusBadgeProps {
 }
 
 const statusConfig: Record<ProjectStatus, { label: string; className: string }> = {
+  discovering: {
+    label: "发掘中",
+    className: "bg-[#FF8C00]/20 text-[#FF8C00] border-[#FF8C00]/30",
+  },
+  auctioning: {
+    label: "竞拍中",
+    className: "bg-[#9945FF]/20 text-[#9945FF] border-[#9945FF]/30 animate-pulse",
+  },
   launching: {
     label: "发射中",
     className: "bg-[#00E5FF]/20 text-[#00E5FF] border-[#00E5FF]/30 animate-pulse",

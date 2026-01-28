@@ -1,16 +1,19 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { Sidebar, ProjectCard, useSidebar } from "@/components/imo";
-import { getProjects } from "@/lib/mock-data";
-import { ProjectStatus, Chain } from "@/types/imo";
+import { listProjects } from "@/lib/api/imo";
+import { Project, ProjectStatus, Chain } from "@/types/imo";
+import Dropdown from "@/components/ui/Dropdown";
 
 type FilterStatus = ProjectStatus | "all";
 type FilterChain = Chain | "all";
 
 const statusFilters: { value: FilterStatus; label: string }[] = [
   { value: "all", label: "全部" },
+  { value: "discovering", label: "发掘中" },
+  { value: "auctioning", label: "竞拍中" },
   { value: "launching", label: "发射中" },
   { value: "launched", label: "已发射" },
   { value: "claimed", label: "已认领" },
@@ -22,13 +25,13 @@ const chainFilters: { value: FilterChain; label: string }[] = [
   { value: "bsc", label: "BSC" },
 ];
 
-type SortOption = "newest" | "oldest" | "firstbuy-high" | "firstbuy-low";
+type SortOption = "newest" | "oldest" | "bid-high" | "bid-count";
 
 const sortOptions: { value: SortOption; label: string }[] = [
-  { value: "newest", label: "最新发射" },
-  { value: "oldest", label: "最早发射" },
-  { value: "firstbuy-high", label: "首单最高" },
-  { value: "firstbuy-low", label: "首单最低" },
+  { value: "newest", label: "最新发掘" },
+  { value: "oldest", label: "最早发掘" },
+  { value: "bid-high", label: "出价最高" },
+  { value: "bid-count", label: "竞价最热" },
 ];
 
 function IMOHomeContent() {
@@ -38,11 +41,35 @@ function IMOHomeContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const { sidebarWidth } = useSidebar();
   
-  // 获取所有项目并应用筛选
-  const allProjects = getProjects({
-    status: statusFilter !== "all" ? statusFilter : undefined,
-    chain: chainFilter !== "all" ? chainFilter : undefined,
-  });
+  // 项目数据状态
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // 从后端获取项目列表
+  useEffect(() => {
+    async function fetchProjects() {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await listProjects({
+          status: statusFilter !== "all" ? statusFilter : undefined,
+          chain: chainFilter !== "all" ? chainFilter : undefined,
+          limit: 100,
+        });
+        if (result.success && result.data) {
+          setAllProjects(result.data as Project[]);
+        } else {
+          setError(result.error || "获取项目列表失败");
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "网络错误");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProjects();
+  }, [statusFilter, chainFilter]);
 
   // 搜索和排序过滤
   const projects = useMemo(() => {
@@ -62,13 +89,13 @@ function IMOHomeContent() {
     const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case "newest":
-          return new Date(b.launchedAt || b.createdAt || 0).getTime() - new Date(a.launchedAt || a.createdAt || 0).getTime();
+          return new Date(b.discovered_at || 0).getTime() - new Date(a.discovered_at || 0).getTime();
         case "oldest":
-          return new Date(a.launchedAt || a.createdAt || 0).getTime() - new Date(b.launchedAt || b.createdAt || 0).getTime();
-        case "firstbuy-high":
-          return (b.firstBuyAmount || 0) - (a.firstBuyAmount || 0);
-        case "firstbuy-low":
-          return (a.firstBuyAmount || 0) - (b.firstBuyAmount || 0);
+          return new Date(a.discovered_at || 0).getTime() - new Date(b.discovered_at || 0).getTime();
+        case "bid-high":
+          return (b.current_bid_amount || 0) - (a.current_bid_amount || 0);
+        case "bid-count":
+          return (b.bid_count || 0) - (a.bid_count || 0);
         default:
           return 0;
       }
@@ -119,57 +146,6 @@ function IMOHomeContent() {
               )}
             </div>
             
-            {/* Status Filters - Hidden on mobile, shown in horizontal scroll */}
-            <div className="flex items-center gap-3 md:gap-4 overflow-x-auto scrollbar-hide">
-              <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-                {statusFilters.map((filter) => (
-                  <button
-                    key={filter.value}
-                    onClick={() => setStatusFilter(filter.value)}
-                    className={`px-2 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition whitespace-nowrap ${
-                      statusFilter === filter.value
-                        ? "bg-[#FF8C00] text-black"
-                        : "text-gray-400 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
-              </div>
-              
-              {/* Chain Filter */}
-              <div className="h-6 w-px bg-white/10 flex-shrink-0 hidden md:block" />
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {chainFilters.map((filter) => (
-                  <button
-                    key={filter.value}
-                    onClick={() => setChainFilter(filter.value)}
-                    className={`px-2 md:px-3 py-1 md:py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap ${
-                      chainFilter === filter.value
-                        ? "bg-white/10 text-white"
-                        : "text-gray-500 hover:text-gray-300"
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
-              </div>
-              
-              {/* Sort Dropdown */}
-              <div className="h-6 w-px bg-white/10" />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-md text-xs font-medium text-gray-300 focus:outline-none focus:border-[#FF8C00]/50"
-              >
-                {sortOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
             {/* Discover Button */}
             <Link
               href="/submit"
@@ -186,24 +162,51 @@ function IMOHomeContent() {
         
         {/* Content */}
         <div className="p-4 md:p-6">
-          {/* Stats Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
-            <div className="bg-[#111111] border border-white/10 rounded-xl p-3 md:p-4">
-              <p className="text-gray-400 text-xs md:text-sm mb-1">总项目数</p>
-              <p className="text-xl md:text-2xl font-bold text-white">128</p>
+          {/* Filters Bar - Above Projects */}
+          <div className="flex flex-wrap items-center gap-3 md:gap-4 mb-6">
+            {/* Status Filters */}
+            <div className="flex items-center gap-1 md:gap-2">
+              {statusFilters.map((filter) => (
+                <button
+                  key={filter.value}
+                  onClick={() => setStatusFilter(filter.value)}
+                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition whitespace-nowrap ${
+                    statusFilter === filter.value
+                      ? "bg-[#FF8C00] text-black"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
             </div>
-            <div className="bg-[#111111] border border-white/10 rounded-xl p-3 md:p-4">
-              <p className="text-gray-400 text-xs md:text-sm mb-1">竞拍中</p>
-              <p className="text-xl md:text-2xl font-bold text-[#FF8C00]">12</p>
+            
+            {/* Chain Filter */}
+            <div className="h-6 w-px bg-white/10 hidden md:block" />
+            <div className="flex items-center gap-1">
+              {chainFilters.map((filter) => (
+                <button
+                  key={filter.value}
+                  onClick={() => setChainFilter(filter.value)}
+                  className={`px-2 md:px-3 py-1 md:py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap ${
+                    chainFilter === filter.value
+                      ? "bg-white/10 text-white"
+                      : "text-gray-500 hover:text-gray-300"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
             </div>
-            <div className="bg-[#111111] border border-white/10 rounded-xl p-3 md:p-4">
-              <p className="text-gray-400 text-xs md:text-sm mb-1">已发射</p>
-              <p className="text-xl md:text-2xl font-bold text-[#10B981]">89</p>
-            </div>
-            <div className="bg-[#111111] border border-white/10 rounded-xl p-3 md:p-4">
-              <p className="text-gray-400 text-xs md:text-sm mb-1">总成交额</p>
-              <p className="text-xl md:text-2xl font-bold text-sol">1,234 SOL</p>
-            </div>
+            
+            {/* Sort Dropdown */}
+            <div className="h-6 w-px bg-white/10 hidden md:block" />
+            <Dropdown
+              options={sortOptions}
+              value={sortBy}
+              onChange={setSortBy}
+              className="min-w-[120px]"
+            />
           </div>
           
           {/* Projects Grid */}

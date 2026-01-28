@@ -6,6 +6,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
+import { useToast } from "@/components/ui/Toast";
 
 // API 基础 URL
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -66,6 +67,7 @@ const DIMENSIONS = [
 export default function PHEvaluatorPage() {
   const { locale } = useI18n();
   const { user, token } = useAuth();
+  const toast = useToast();
   
   const [phUrl, setPhUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -414,7 +416,7 @@ export default function PHEvaluatorPage() {
                   onClick={() => {
                     const shareUrl = `${window.location.origin}/ph-evaluator/share/${evaluation.id}`;
                     navigator.clipboard.writeText(shareUrl);
-                    alert(locale === "zh" ? "分享链接已复制！" : "Share link copied!");
+                    toast.success(locale === "zh" ? "分享链接已复制！" : "Share link copied!");
                   }}
                   className="px-6 py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-xl transition"
                 >
