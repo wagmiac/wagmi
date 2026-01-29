@@ -4,39 +4,20 @@ import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { Sidebar, ProjectCard, useSidebar } from "@/components/imo";
 import { listProjects } from "@/lib/api/imo";
-import { Project, ProjectStatus, Chain } from "@/types/imo";
+import { Project } from "@/types/imo";
 import Dropdown from "@/components/ui/Dropdown";
 
-type FilterStatus = ProjectStatus | "all";
-type FilterChain = Chain | "all";
-
-const statusFilters: { value: FilterStatus; label: string }[] = [
-  { value: "all", label: "全部" },
-  { value: "discovering", label: "发掘中" },
-  { value: "auctioning", label: "竞拍中" },
-  { value: "launching", label: "发射中" },
-  { value: "launched", label: "已发射" },
-  { value: "claimed", label: "已认领" },
-];
-
-const chainFilters: { value: FilterChain; label: string }[] = [
-  { value: "all", label: "全部链" },
-  { value: "solana", label: "Solana" },
-  { value: "bsc", label: "BSC" },
-];
-
-type SortOption = "newest" | "oldest" | "bid-high" | "bid-count";
+// 排序选项
+type SortOption = "newest" | "oldest" | "stars" | "hot";
 
 const sortOptions: { value: SortOption; label: string }[] = [
-  { value: "newest", label: "最新发掘" },
-  { value: "oldest", label: "最早发掘" },
-  { value: "bid-high", label: "出价最高" },
-  { value: "bid-count", label: "竞价最热" },
+  { value: "newest", label: "最新创建" },
+  { value: "oldest", label: "最早创建" },
+  { value: "stars", label: "Stars 最多" },
+  { value: "hot", label: "热度最高" },
 ];
 
 function IMOHomeContent() {
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
-  const [chainFilter, setChainFilter] = useState<FilterChain>("all");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [searchQuery, setSearchQuery] = useState("");
   const { sidebarWidth } = useSidebar();
@@ -53,12 +34,11 @@ function IMOHomeContent() {
       setError(null);
       try {
         const result = await listProjects({
-          status: statusFilter !== "all" ? statusFilter : undefined,
-          chain: chainFilter !== "all" ? chainFilter : undefined,
+          // 不再按状态筛选
           limit: 100,
         });
         if (result.success && result.data) {
-          setAllProjects(result.data as Project[]);
+          setAllProjects(result.data);
         } else {
           setError(result.error || "获取项目列表失败");
         }
@@ -69,7 +49,7 @@ function IMOHomeContent() {
       }
     }
     fetchProjects();
-  }, [statusFilter, chainFilter]);
+  }, []); // 只在组件挂载时加载一次
 
   // 搜索和排序过滤
   const projects = useMemo(() => {
@@ -89,13 +69,18 @@ function IMOHomeContent() {
     const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case "newest":
-          return new Date(b.discovered_at || 0).getTime() - new Date(a.discovered_at || 0).getTime();
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
         case "oldest":
-          return new Date(a.discovered_at || 0).getTime() - new Date(b.discovered_at || 0).getTime();
-        case "bid-high":
-          return (b.current_bid_amount || 0) - (a.current_bid_amount || 0);
-        case "bid-count":
-          return (b.bid_count || 0) - (a.bid_count || 0);
+          return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+        case "stars":
+          return (b.github_stars || 0) - (a.github_stars || 0);
+        case "hot": {
+          // 按热度等级排序
+          const hotOrder: Record<string, number> = { explosive: 5, hot: 4, warm: 3, normal: 2, cold: 1 };
+          const aHot = hotOrder[a.github_hot_level || 'cold'] || 0;
+          const bHot = hotOrder[b.github_hot_level || 'cold'] || 0;
+          return bHot - aHot;
+        }
         default:
           return 0;
       }
@@ -163,44 +148,13 @@ function IMOHomeContent() {
         {/* Content */}
         <div className="p-4 md:p-6">
           {/* Filters Bar - Above Projects */}
-          <div className="flex flex-wrap items-center gap-3 md:gap-4 mb-6">
-            {/* Status Filters */}
-            <div className="flex items-center gap-1 md:gap-2">
-              {statusFilters.map((filter) => (
-                <button
-                  key={filter.value}
-                  onClick={() => setStatusFilter(filter.value)}
-                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition whitespace-nowrap ${
-                    statusFilter === filter.value
-                      ? "bg-[#FF8C00] text-black"
-                      : "text-gray-400 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
-            
-            {/* Chain Filter */}
-            <div className="h-6 w-px bg-white/10 hidden md:block" />
-            <div className="flex items-center gap-1">
-              {chainFilters.map((filter) => (
-                <button
-                  key={filter.value}
-                  onClick={() => setChainFilter(filter.value)}
-                  className={`px-2 md:px-3 py-1 md:py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap ${
-                    chainFilter === filter.value
-                      ? "bg-white/10 text-white"
-                      : "text-gray-500 hover:text-gray-300"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
+          <div className="flex flex-wrap items-center justify-between gap-3 md:gap-4 mb-6">
+            {/* 项目数量 */}
+            <div className="text-gray-400 text-sm">
+              共 <span className="text-white font-bold">{projects.length}</span> 个项目
             </div>
             
             {/* Sort Dropdown */}
-            <div className="h-6 w-px bg-white/10 hidden md:block" />
             <Dropdown
               options={sortOptions}
               value={sortBy}

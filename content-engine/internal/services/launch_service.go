@@ -386,6 +386,7 @@ type LaunchServiceRequest struct {
 	Metadata          map[string]interface{} `json:"metadata"`
 	CreatorPrivateKey string                 `json:"creatorPrivateKey"`
 	InitialBuyAmount  float64                `json:"initialBuyAmount,omitempty"`
+	TaxRate           int                    `json:"taxRate,omitempty"` // flap.sh 税率（基点，0=无税，100=1%，300=3%）
 }
 
 // LaunchServiceResponse 发射服务响应
@@ -400,7 +401,15 @@ type LaunchServiceResponse struct {
 
 // callLaunchService 调用 launch-service 微服务
 func (s *LaunchService) callLaunchService(project *models.Project, privateKey string, initialBuyAmount float64) (*LaunchResult, error) {
-	// 构建请求
+	// 验证必须有 Logo
+	if project.Logo == "" {
+		return nil, errors.New("project logo is required for launch")
+	}
+
+	// 构建请求（描述最大200字符）
+	// 网站链接统一使用 wagmi ticker 页面
+	wagmiWebsite := fmt.Sprintf("https://wagmi.ac/%s", project.Ticker)
+
 	reqBody := LaunchServiceRequest{
 		Launchpad:         string(project.Launchpad),
 		CreatorPrivateKey: privateKey,
@@ -408,11 +417,11 @@ func (s *LaunchService) callLaunchService(project *models.Project, privateKey st
 		Metadata: map[string]interface{}{
 			"name":        project.Name,
 			"symbol":      project.Ticker,
-			"description": project.Description,
+			"description": truncateDescription(project.Description, 200),
 			"image":       project.Logo,
 			"twitter":     project.Twitter,
-			"telegram":    project.Discord, // 使用 Discord 作为社区链接
-			"website":     project.Website,
+			"telegram":    project.Telegram,
+			"website":     wagmiWebsite,
 		},
 	}
 
@@ -652,4 +661,238 @@ func base58Encode(input []byte) string {
 	}
 
 	return string(result)
+}
+
+// ========== Launch Service 新增接口 ==========
+
+// VerifyTransactionRequest 验证交易请求
+type VerifyTransactionRequest struct {
+	Chain          string  `json:"chain"`
+	TxHash         string  `json:"txHash"`
+	ExpectedTo     string  `json:"expectedTo"`
+	ExpectedAmount float64 `json:"expectedAmount"`
+}
+
+// VerifyTransactionResponse 验证交易响应
+type VerifyTransactionResponse struct {
+	Success      bool    `json:"success"`
+	Verified     bool    `json:"verified"`
+	Confirmed    bool    `json:"confirmed"`
+	ActualAmount float64 `json:"actualAmount,omitempty"`
+	ActualFrom   string  `json:"actualFrom,omitempty"`
+	ActualTo     string  `json:"actualTo,omitempty"`
+	Error        string  `json:"error,omitempty"`
+}
+
+// VerifyPaymentTransaction 验证支付交易
+func (s *LaunchService) VerifyPaymentTransaction(chain models.Chain, txHash string, expectedTo string, expectedAmount float64) (*VerifyTransactionResponse, error) {
+	reqBody := VerifyTransactionRequest{
+		Chain:          string(chain),
+		TxHash:         txHash,
+		ExpectedTo:     expectedTo,
+		ExpectedAmount: expectedAmount,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := s.callLaunchServiceAPI("/api/verify-transaction", jsonData)
+	if err != nil {
+		return nil, err
+	}
+
+	var result VerifyTransactionResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// TokenBalanceRequest 代币余额请求
+type TokenBalanceRequest struct {
+	Chain         string `json:"chain"`
+	TokenAddress  string `json:"tokenAddress"`
+	WalletAddress string `json:"walletAddress"`
+}
+
+// TokenBalanceResponse 代币余额响应
+type TokenBalanceResponse struct {
+	Success  bool   `json:"success"`
+	Balance  string `json:"balance,omitempty"`
+	Decimals int    `json:"decimals,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+// GetTokenBalance 查询代币余额
+func (s *LaunchService) GetTokenBalance(chain models.Chain, tokenAddress string, walletAddress string) (*TokenBalanceResponse, error) {
+	reqBody := TokenBalanceRequest{
+		Chain:         string(chain),
+		TokenAddress:  tokenAddress,
+		WalletAddress: walletAddress,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := s.callLaunchServiceAPI("/api/token-balance", jsonData)
+	if err != nil {
+		return nil, err
+	}
+
+	var result TokenBalanceResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// TransferTokenRequest 转账代币请求
+type TransferTokenRequest struct {
+	Chain          string `json:"chain"`
+	TokenAddress   string `json:"tokenAddress"`
+	FromPrivateKey string `json:"fromPrivateKey"`
+	ToAddress      string `json:"toAddress"`
+	Amount         string `json:"amount"`
+}
+
+// TransferTokenResponse 转账代币响应
+type TransferTokenResponse struct {
+	Success bool   `json:"success"`
+	TxHash  string `json:"txHash,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// TransferTokenToUser 将代币转给用户
+func (s *LaunchService) TransferTokenToUser(chain models.Chain, tokenAddress string, fromPrivateKey string, toAddress string, amount string) (*TransferTokenResponse, error) {
+	reqBody := TransferTokenRequest{
+		Chain:          string(chain),
+		TokenAddress:   tokenAddress,
+		FromPrivateKey: fromPrivateKey,
+		ToAddress:      toAddress,
+		Amount:         amount,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := s.callLaunchServiceAPI("/api/transfer-token", jsonData)
+	if err != nil {
+		return nil, err
+	}
+
+	var result TransferTokenResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// TransferNativeRequest 转账原生代币请求
+type TransferNativeRequest struct {
+	Chain          string  `json:"chain"`
+	FromPrivateKey string  `json:"fromPrivateKey"`
+	ToAddress      string  `json:"toAddress"`
+	Amount         float64 `json:"amount"`
+}
+
+// TransferNativeResponse 转账原生代币响应
+type TransferNativeResponse struct {
+	Success bool   `json:"success"`
+	TxHash  string `json:"txHash,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// RefundToUser 退款给用户
+func (s *LaunchService) RefundToUser(chain models.Chain, fromPrivateKey string, toAddress string, amount float64) (*TransferNativeResponse, error) {
+	reqBody := TransferNativeRequest{
+		Chain:          string(chain),
+		FromPrivateKey: fromPrivateKey,
+		ToAddress:      toAddress,
+		Amount:         amount,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := s.callLaunchServiceAPI("/api/transfer-native", jsonData)
+	if err != nil {
+		return nil, err
+	}
+
+	var result TransferNativeResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// callLaunchServiceAPI 调用 launch-service API
+func (s *LaunchService) callLaunchServiceAPI(endpoint string, jsonData []byte) ([]byte, error) {
+	launchServiceURL := s.cfg.LaunchServiceURL
+	if launchServiceURL == "" {
+		launchServiceURL = "http://localhost:3001"
+	}
+
+	// 生成签名
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	
+	// 对 JSON body 进行签名
+	secret := s.cfg.LaunchServiceSecret
+	if secret == "" {
+		secret = "wagmi-launch-service-secret-2026"
+	}
+	payload := timestamp + "." + string(jsonData)
+	h := hmac.New(sha256.New, []byte(secret))
+	h.Write([]byte(payload))
+	signature := hex.EncodeToString(h.Sum(nil))
+
+	// 创建请求
+	req, err := http.NewRequest("POST", launchServiceURL+endpoint, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Signature", signature)
+	req.Header.Set("X-Timestamp", timestamp)
+
+	// 发送请求
+func (s *LaunchService) callLaunchServiceAPI(endpoint string, jsonData []byte) ([]byte, error) {
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call launch service: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("launch service error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	return body, nil
+}
+
+// truncateDescription 截断描述，最大200字符
+func truncateDescription(desc string, maxLen int) string {
+	runes := []rune(desc)
+	if len(runes) <= maxLen {
+		return desc
+	}
+	return string(runes[:maxLen])
 }

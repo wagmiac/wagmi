@@ -263,6 +263,7 @@ type CreateProjectRequest struct {
 	Logo        string `json:"logo"`
 	Description string `json:"description"`
 	Twitter     string `json:"twitter"`
+	Telegram    string `json:"telegram"` // Telegram 链接
 	Github      string `json:"github"`
 	Website     string `json:"website"`
 	ProductHunt string `json:"productHunt"` // Product Hunt 链接
@@ -350,6 +351,7 @@ func (h *IMOHandler) CreateProject(c *gin.Context) {
 		Logo:           req.Logo,
 		Description:    req.Description,
 		Twitter:        req.Twitter,
+		Telegram:       req.Telegram,
 		Github:         req.Github,
 		Website:        req.Website,
 		ProductHunt:    req.ProductHunt,
@@ -412,6 +414,7 @@ type UpdateProjectRequest struct {
 	Logo        *string `json:"logo"`
 	Description *string `json:"description"`
 	Twitter     *string `json:"twitter"`
+	Telegram    *string `json:"telegram"`
 	Github      *string `json:"github"`
 	Website     *string `json:"website"`
 	ProductHunt *string `json:"productHunt"`
@@ -473,6 +476,9 @@ func (h *IMOHandler) UpdateProject(c *gin.Context) {
 	}
 	if req.Twitter != nil {
 		updates["twitter"] = *req.Twitter
+	}
+	if req.Telegram != nil {
+		updates["telegram"] = *req.Telegram
 	}
 	if req.Github != nil {
 		updates["github"] = *req.Github

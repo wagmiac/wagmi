@@ -9,8 +9,8 @@ interface TokenListProps {
   project: Project;
 }
 
-// 所有发射台列表
-const ALL_LAUNCHPADS: Launchpad[] = ['pump.fun', 'trends.fun', 'bags.fm', 'four.meme', 'flap.sh'];
+// 所有发射台列表（trends.fun 暂时隐藏，等对接完成后再加回来）
+const ALL_LAUNCHPADS: Launchpad[] = ['pump.fun', 'bags.fm', 'four.meme', 'flap.sh'];
 
 // 发射台 logo 映射
 const LAUNCHPAD_LOGOS: Record<Launchpad, string> = {
@@ -18,7 +18,7 @@ const LAUNCHPAD_LOGOS: Record<Launchpad, string> = {
   'trends.fun': '/trends-logo.png',
   'bags.fm': '/bagsfm.png',
   'four.meme': '/fourmeme.svg',
-  'flap.sh': '/chains/bsc.svg', // 暂用 BSC 图标
+  'flap.sh': '/flapsh.webp',
 };
 
 export function TokenList({ project }: TokenListProps) {
@@ -99,6 +99,12 @@ export function TokenList({ project }: TokenListProps) {
     const chainConfig = CHAIN_CONFIG[chain];
     const wallet = getWalletByChain(chain);
     
+    // 检查项目是否有 Logo
+    if (!project.logo) {
+      setError("项目缺少 Logo 图片，请先上传图片");
+      return;
+    }
+    
     if (!wallet) {
       setError(`请先连接 ${chain === "solana" ? "Phantom" : "MetaMask"} 钱包`);
       return;
@@ -151,12 +157,16 @@ export function TokenList({ project }: TokenListProps) {
         return;
       }
 
+      // 使用实际转账的钱包地址（可能与存储的不同，因为用户可能切换了账户）
+      const actualUserWallet = transferResult.fromAddress || wallet.address;
+      console.log("Payment successful, user wallet:", actualUserWallet);
+
       // 支付成功，调用后端发射接口
       const res = await launchWithPayment(project.id, {
         chain: chain,
         launchpad: launchpad,
         firstBuyAmount: amount,
-        userWallet: wallet.address,
+        userWallet: actualUserWallet,
         paymentTxHash: transferResult.txHash!,
       });
 

@@ -136,6 +136,12 @@ func (s *IMOEvaluationService) EvaluateProject(projectID string, evaluatedBy str
 		return nil, fmt.Errorf("failed to save evaluation: %w", err)
 	}
 
+	// 更新项目的评级缓存
+	s.db.Model(&models.Project{}).Where("id = ?", projectID).Updates(map[string]interface{}{
+		"eval_overall_grade": string(evaluation.OverallGrade),
+		"eval_summary":       evaluation.Summary,
+	})
+
 	return evaluation, nil
 }
 

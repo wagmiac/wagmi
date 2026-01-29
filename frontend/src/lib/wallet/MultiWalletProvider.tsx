@@ -46,6 +46,7 @@ export interface TransferResult {
   success: boolean;
   txHash?: string;
   error?: string;
+  fromAddress?: string; // 实际使用的发送地址（可能与存储的不同）
 }
 
 /**
@@ -89,26 +90,53 @@ export function MultiWalletProvider({ children }: { children: ReactNode }) {
     activeChain: null,
   });
 
-  // 从本地存储恢复钱包状态
+  // 从本地存储恢复钱包状态，并尝试重新连接
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const data = JSON.parse(stored) as { wallets: WalletConnection[]; activeChain: Chain | null };
-        if (data.wallets && data.wallets.length > 0) {
-          const primary = data.wallets.find((w) => w.isPrimary) || data.wallets[0];
-          setState({
-            isAuthenticated: true,
-            isConnecting: false,
-            primaryWallet: primary,
-            wallets: data.wallets,
-            activeChain: data.activeChain || primary.chain,
-          });
+    const restoreAndReconnect = async () => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const data = JSON.parse(stored) as { wallets: WalletConnection[]; activeChain: Chain | null };
+          if (data.wallets && data.wallets.length > 0) {
+            const primary = data.wallets.find((w) => w.isPrimary) || data.wallets[0];
+            
+            // 先恢复状态显示
+            setState({
+              isAuthenticated: true,
+              isConnecting: false,
+              primaryWallet: primary,
+              wallets: data.wallets,
+              activeChain: data.activeChain || primary.chain,
+            });
+            
+            // 尝试静默重连各个钱包以获取签名权限
+            for (const wallet of data.wallets) {
+              try {
+                if (wallet.chain === 'solana') {
+                  const solana = (window as WindowWithSolana).solana;
+                  if (solana?.isPhantom || solana?.isSolflare) {
+                    // 使用 onlyIfTrusted 尝试静默连接
+                    await solana.connect({ onlyIfTrusted: true });
+                  }
+                } else if (wallet.chain === 'bsc') {
+                  const ethereum = (window as WindowWithEthereum).ethereum;
+                  if (ethereum?.isMetaMask) {
+                    // MetaMask 会自动保持连接状态
+                    await ethereum.request({ method: 'eth_accounts' });
+                  }
+                }
+              } catch (e) {
+                console.log(`Silent reconnect for ${wallet.chain} failed, user may need to reconnect manually`);
+              }
+            }
+          }
         }
+      } catch (e) {
+        console.error("Failed to restore wallet state:", e);
       }
-    } catch (e) {
-      console.error("Failed to restore wallet state:", e);
-    }
+    };
+    
+    restoreAndReconnect();
   }, []);
 
   // 保存钱包状态到本地存储
@@ -331,6 +359,33 @@ export function MultiWalletProvider({ children }: { children: ReactNode }) {
       return { success: false, error: "未连接对应链的钱包" };
     }
 
+    // 确保钱包已授权签名权限
+    try {
+      if (params.chain === 'solana') {
+        const solana = (window as WindowWithSolana).solana;
+        if (solana?.isPhantom || solana?.isSolflare) {
+          // 检查连接状态，如果未连接则重新连接
+          if (!solana.isConnected) {
+            console.log("Solana wallet not connected, reconnecting...");
+            await solana.connect();
+          }
+        }
+      } else if (params.chain === 'bsc') {
+        const ethereum = (window as WindowWithEthereum).ethereum;
+        if (ethereum?.isMetaMask) {
+          // 确保账户已授权
+          const accounts = await ethereum.request({ method: 'eth_accounts' }) as string[];
+          if (!accounts || accounts.length === 0) {
+            console.log("MetaMask not authorized, requesting accounts...");
+            await ethereum.request({ method: 'eth_requestAccounts' });
+          }
+        }
+      }
+    } catch (reconnectError) {
+      console.error("Failed to reconnect wallet:", reconnectError);
+      return { success: false, error: "钱包连接已断开，请重新连接钱包" };
+    }
+
     try {
       if (params.chain === "solana") {
         const solana = (window as WindowWithSolana).solana;
@@ -338,13 +393,55 @@ export function MultiWalletProvider({ children }: { children: ReactNode }) {
           return { success: false, error: "未找到 Solana 钱包" };
         }
 
+        // 检查钱包是否已连接
+        if (!solana.isConnected) {
+          console.log("Wallet not connected, attempting to reconnect...");
+          try {
+            await solana.connect();
+          } catch (connectErr) {
+            console.error("Failed to reconnect:", connectErr);
+            return { success: false, error: "钱包未连接，请刷新页面重新连接" };
+          }
+        }
+
         // 动态导入 @solana/web3.js
         const { PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL, Connection } = await import("@solana/web3.js");
         
-        // 创建转账交易
-        const fromPubkey = new PublicKey(wallet.address);
+        // 使用 Phantom 当前的 publicKey，而不是存储的地址
+        // 因为用户可能在 Phantom 中切换了账户
+        const currentPublicKey = solana.publicKey;
+        if (!currentPublicKey) {
+          return { success: false, error: "无法获取钱包地址，请重新连接钱包" };
+        }
+        const currentAddress = currentPublicKey.toBase58();
+        
+        // 如果当前账户与存储的不一致，提示用户
+        if (currentAddress !== wallet.address) {
+          console.warn("Wallet account changed! Stored:", wallet.address, "Current:", currentAddress);
+          // 更新存储的地址 - 这里暂时用当前地址继续
+        }
+        
+        // 创建转账交易 - 使用 Phantom 当前账户
+        const fromPubkey = currentPublicKey;
         const toPubkey = new PublicKey(params.to);
         const lamports = Math.floor(params.amount * LAMPORTS_PER_SOL);
+        
+        // 调试日志
+        console.log("=== Solana Transfer Debug ===");
+        console.log("Stored address:", wallet.address);
+        console.log("Current Phantom address:", currentAddress);
+        console.log("From (using current):", currentAddress);
+        console.log("To:", params.to);
+        console.log("Amount (SOL):", params.amount);
+        console.log("Lamports:", lamports);
+        
+        // 检查参数有效性
+        if (!params.to || params.to.length < 32) {
+          return { success: false, error: `无效的接收地址: ${params.to}` };
+        }
+        if (lamports <= 0) {
+          return { success: false, error: `无效的转账金额: ${params.amount} SOL` };
+        }
         
         const transaction = new Transaction().add(
           SystemProgram.transfer({
@@ -354,26 +451,119 @@ export function MultiWalletProvider({ children }: { children: ReactNode }) {
           })
         );
         
-        // 设置 feePayer
+        // 设置 feePayer - 使用当前账户
         transaction.feePayer = fromPubkey;
         
-        // 获取 recentBlockhash - 使用公共 RPC（只读取 blockhash，负载很低）
-        // Phantom 的 signAndSendTransaction 仍需要有 recentBlockhash
-        const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC || "https://api.mainnet-beta.solana.com";
-        const connection = new Connection(rpcUrl, "confirmed");
-        const { blockhash } = await connection.getLatestBlockhash();
+        // 获取 recentBlockhash - 尝试多个 RPC 节点
+        // 备用 RPC 列表（按优先级）
+        const rpcUrls = [
+          process.env.NEXT_PUBLIC_SOLANA_RPC,
+          "https://api.mainnet-beta.solana.com",
+          "https://solana-mainnet.g.alchemy.com/v2/demo",
+          "https://rpc.ankr.com/solana",
+        ].filter(Boolean) as string[];
+        
+        let blockhash: string | null = null;
+        let lastError: Error | null = null;
+        
+        for (const rpcUrl of rpcUrls) {
+          try {
+            console.log(`Trying RPC: ${rpcUrl.substring(0, 50)}...`);
+            const connection = new Connection(rpcUrl, { commitment: "confirmed", confirmTransactionInitialTimeout: 10000 });
+            const result = await connection.getLatestBlockhash();
+            blockhash = result.blockhash;
+            console.log("Got blockhash from:", rpcUrl.substring(0, 50));
+            break;
+          } catch (e) {
+            console.warn(`RPC ${rpcUrl.substring(0, 50)} failed:`, e);
+            lastError = e as Error;
+          }
+        }
+        
+        if (!blockhash) {
+          return { success: false, error: `无法连接 Solana 网络，请检查网络连接后重试` };
+        }
+        
         transaction.recentBlockhash = blockhash;
         
-        // 使用 Phantom 的 signAndSendTransaction
-        // Phantom 会使用自己的 RPC 发送交易（避免我们的 RPC 限流）
-        if (solana.signAndSendTransaction) {
-          const { signature } = await solana.signAndSendTransaction(transaction);
-          return { success: true, txHash: signature };
-        } else {
-          // 旧版 Phantom 降级处理
+        // 尝试多种方式发送交易
+        try {
+          console.log("Attempting to sign and send transaction...");
+          
+          // 方法1: 使用 signAndSendTransaction（Phantom 推荐方式）
+          if (solana.signAndSendTransaction) {
+            try {
+              console.log("Using signAndSendTransaction...");
+              const result = await solana.signAndSendTransaction(transaction, {
+                skipPreflight: false,
+                preflightCommitment: "confirmed",
+              });
+              console.log("Transaction sent via Phantom:", result.signature);
+              return { success: true, txHash: result.signature, fromAddress: currentAddress };
+            } catch (sendErr: unknown) {
+              console.warn("signAndSendTransaction failed:", sendErr);
+              const err = sendErr as { code?: number; message?: string };
+              // 如果是用户取消，直接返回
+              if (err?.code === 4001 || err?.message?.includes("User rejected")) {
+                return { success: false, error: "用户取消了交易" };
+              }
+              // 其他错误尝试方法2
+              console.log("Falling back to signTransaction + manual send...");
+            }
+          }
+          
+          // 方法2: signTransaction + 手动发送
+          console.log("Using signTransaction + manual send...");
           const signed = await solana.signTransaction(transaction);
-          const txHash = await connection.sendRawTransaction(signed.serialize());
-          return { success: true, txHash };
+          console.log("Transaction signed, sending via RPC...");
+          
+          // 使用我们的 RPC 发送交易
+          let txHash: string | null = null;
+          let lastSendError: Error | null = null;
+          for (const rpcUrl of rpcUrls) {
+            try {
+              const connection = new Connection(rpcUrl, { 
+                commitment: "confirmed",
+                confirmTransactionInitialTimeout: 30000 
+              });
+              txHash = await connection.sendRawTransaction(signed.serialize(), {
+                skipPreflight: false,
+                preflightCommitment: "confirmed",
+              });
+              console.log("Transaction sent via:", rpcUrl.substring(0, 50), "txHash:", txHash);
+              break;
+            } catch (sendErr) {
+              console.warn(`Send via ${rpcUrl.substring(0, 50)} failed:`, sendErr);
+              lastSendError = sendErr as Error;
+            }
+          }
+          
+          if (!txHash) {
+            return { success: false, error: lastSendError?.message || "发送交易失败，请稍后重试" };
+          }
+          
+          return { success: true, txHash, fromAddress: currentAddress };
+        } catch (signErr: unknown) {
+          console.error("Sign/send error:", signErr);
+          console.error("Sign error details:", JSON.stringify(signErr, Object.getOwnPropertyNames(signErr as object)));
+          const err = signErr as { code?: number; message?: string };
+          if (err?.code === 4001 || err?.message?.includes("User rejected")) {
+            return { success: false, error: "用户取消了交易" };
+          }
+          if (err?.code === -32603) {
+            // 尝试断开重连
+            try {
+              console.log("Attempting to disconnect and reconnect wallet...");
+              await solana.disconnect();
+              await new Promise(resolve => setTimeout(resolve, 500));
+              await solana.connect();
+              return { success: false, error: "钱包连接已重置，请重新尝试" };
+            } catch {
+              return { success: false, error: "钱包签名失败，请在 Phantom 中断开此网站后重新连接" };
+            }
+          }
+          // 返回详细错误而不是重新抛出
+          return { success: false, error: err?.message || "交易签名失败" };
         }
       } else if (params.chain === "bsc") {
         const ethereum = (window as WindowWithEthereum).ethereum;
@@ -416,30 +606,43 @@ export function MultiWalletProvider({ children }: { children: ReactNode }) {
           return { success: false, error: "请在 MetaMask 中切换到 BSC 网络" };
         }
 
+        // 获取 MetaMask 当前账户（可能与存储的不同）
+        const accounts = await ethereum.request({ method: 'eth_accounts' }) as string[];
+        const currentAddress = accounts[0];
+        if (!currentAddress) {
+          return { success: false, error: "无法获取 MetaMask 当前账户" };
+        }
+        
+        if (currentAddress.toLowerCase() !== wallet.address.toLowerCase()) {
+          console.warn("MetaMask account changed! Stored:", wallet.address, "Current:", currentAddress);
+        }
+
         // 将 BNB 转换为 Wei（1 BNB = 10^18 Wei）
         const weiAmount = BigInt(Math.floor(params.amount * 1e18));
         const hexAmount = "0x" + weiAmount.toString(16);
 
         console.log("BSC transfer params:", {
-          from: wallet.address,
+          stored: wallet.address,
+          current: currentAddress,
+          from: currentAddress,
           to: params.to,
           value: hexAmount,
           amount: params.amount,
         });
 
-        // 发送交易
+        // 发送交易 - 使用当前账户
         try {
           const txHash = await ethereum.request({
             method: "eth_sendTransaction",
             params: [{
-              from: wallet.address,
+              from: currentAddress,
               to: params.to,
               value: hexAmount,
             }],
           }) as string;
 
           console.log("BSC transaction hash:", txHash);
-          return { success: true, txHash };
+          return { success: true, txHash, fromAddress: currentAddress };
         } catch (txError: unknown) {
           console.error("BSC eth_sendTransaction error:", txError);
           const err = txError as { message?: string; code?: number; reason?: string };
@@ -468,7 +671,9 @@ export function MultiWalletProvider({ children }: { children: ReactNode }) {
       
       if (msg) {
         // 解析常见错误
-        if (msg.includes("insufficient lamports")) {
+        if (err?.code === 4100 || msg.includes("has not been authorized")) {
+          errorMessage = "钱包未授权，请断开后重新连接钱包";
+        } else if (msg.includes("insufficient lamports")) {
           const match = msg.match(/insufficient lamports (\d+), need (\d+)/);
           if (match) {
             const hasSOL = (parseInt(match[1]) / 1e9).toFixed(4);
@@ -484,10 +689,15 @@ export function MultiWalletProvider({ children }: { children: ReactNode }) {
         } else {
           errorMessage = msg;
         }
+      } else if (err?.code === 4100) {
+        errorMessage = "钱包未授权，请断开后重新连接钱包";
       } else if (err?.code === 4001) {
         errorMessage = "用户取消了交易";
       } else if (err?.code === -32000) {
         errorMessage = "钱包余额不足，请充值后重试";
+      } else if (err?.code === -32603) {
+        // Phantom 内部错误，通常是 RPC 或模拟问题
+        errorMessage = "钱包内部错误。请尝试：1) 刷新页面 2) 断开重连钱包 3) 检查网络连接";
       }
       
       return { success: false, error: errorMessage };

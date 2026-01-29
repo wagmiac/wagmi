@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"content-engine/internal/models"
+	"log"
 	"net/http"
 	"time"
 
@@ -387,6 +388,7 @@ type LaunchWithPaymentRequest struct {
 	FirstBuyAmount float64 `json:"firstBuyAmount" binding:"required"` // 首单购买金额
 	UserWallet     string  `json:"userWallet" binding:"required"`     // 用户钱包地址
 	PaymentTxHash  string  `json:"paymentTxHash" binding:"required"`  // 支付交易哈希
+	TaxRate        int     `json:"taxRate"`                           // flap.sh 专属：税率（基点，0=无税，100=1%，300=3%）
 }
 
 // LaunchWithPayment 带支付哈希的直接发射（用户已通过钱包支付）
@@ -489,6 +491,30 @@ func (h *LaunchHandler) LaunchWithPayment(c *gin.Context) {
 		return
 	}
 
+	// 验证支付交易
+	log.Printf("Verifying payment transaction: %s, to: %s, amount: %.4f", req.PaymentTxHash, devWalletAddress, req.FirstBuyAmount)
+	verifyResp, err := h.service.VerifyPaymentTransaction(chain, req.PaymentTxHash, devWalletAddress, req.FirstBuyAmount)
+	if err != nil {
+		log.Printf("Payment verification error: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Payment verification failed: " + err.Error()})
+		return
+	}
+	if !verifyResp.Success {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Payment verification failed: " + verifyResp.Error})
+		return
+	}
+	if !verifyResp.Confirmed {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Payment transaction not confirmed yet, please wait"})
+		return
+	}
+	if !verifyResp.Verified {
+		log.Printf("Payment verification failed: actualTo=%s, expectedTo=%s, actualAmount=%.4f, expectedAmount=%.4f",
+			verifyResp.ActualTo, devWalletAddress, verifyResp.ActualAmount, req.FirstBuyAmount)
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Payment verification failed: transaction does not match expected recipient or amount"})
+		return
+	}
+	log.Printf("Payment verified successfully: from=%s, amount=%.4f", verifyResp.ActualFrom, verifyResp.ActualAmount)
+
 	// 计算 gas 费
 	gasFee := 0.005 // SOL
 	if chain == models.ChainBSC {
@@ -504,6 +530,7 @@ func (h *LaunchHandler) LaunchWithPayment(c *gin.Context) {
 		UserWallet:           req.UserWallet,
 		Chain:                chain,
 		Launchpad:            launchpad,
+		TaxRate:              req.TaxRate, // flap.sh 税率
 		FirstBuyAmount:       req.FirstBuyAmount,
 		GasFee:               gasFee,
 		PaymentAmount:        req.FirstBuyAmount,

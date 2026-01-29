@@ -15,6 +15,7 @@ interface FormData {
   description: string;
   website: string;
   twitter: string;
+  telegram: string;
   github: string;
   productHunt: string;
   discord: string;
@@ -42,6 +43,7 @@ export default function EditProjectPage() {
     description: "",
     website: "",
     twitter: "",
+    telegram: "",
     github: "",
     productHunt: "",
     discord: "",
@@ -67,6 +69,7 @@ export default function EditProjectPage() {
             description: p.description || "",
             website: p.website || "",
             twitter: p.twitter || "",
+            telegram: p.telegram || "",
             github: p.github || "",
             productHunt: p.product_hunt || "",
             discord: p.discord || "",
@@ -159,6 +162,7 @@ export default function EditProjectPage() {
         description: formData.description || undefined,
         website: formData.website || undefined,
         twitter: formData.twitter || undefined,
+        telegram: formData.telegram || undefined,
         github: formData.github || undefined,
         productHunt: formData.productHunt || undefined,
         discord: formData.discord || undefined,
@@ -341,6 +345,17 @@ export default function EditProjectPage() {
                     value={formData.twitter}
                     onChange={handleChange}
                     placeholder="https://twitter.com/..."
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#FF8C00]/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">Telegram</label>
+                  <input
+                    type="text"
+                    name="telegram"
+                    value={formData.telegram}
+                    onChange={handleChange}
+                    placeholder="https://t.me/..."
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#FF8C00]/50"
                   />
                 </div>

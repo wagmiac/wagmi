@@ -42,6 +42,7 @@ export interface Project {
   description: string;      // 项目描述
   website?: string;         // 官网链接
   twitter?: string;         // Twitter 链接
+  telegram?: string;        // Telegram 链接
   github?: string;          // GitHub 链接
   product_hunt?: string;    // Product Hunt 链接
   discord?: string;         // Discord 链接
@@ -91,6 +92,15 @@ export interface Project {
   
   // 评估状态
   is_evaluating?: boolean;      // 是否正在评估中
+  
+  // AI 评估缓存
+  eval_overall_grade?: string;     // 综合评级缓存 S/A/B/C/D
+  eval_summary?: string;           // 评估摘要缓存
+  
+  // GitHub 缓存数据
+  github_stars?: number;           // Stars 数量
+  github_hot_level?: string;       // 热度等级：explosive/hot/warm/normal/cold
+  github_stars_per_day?: number;   // 日均新增 Stars
   
   // 兼容字段（前端使用）
   verification?: VerificationIcons;

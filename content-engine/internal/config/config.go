@@ -51,7 +51,7 @@ type Config struct {
 
 	// IMO 发射相关
 	WalletEncryptionKey string // Dev钱包私钥加密密钥
-	PlatformWallet      string // 平台收款钱包
+	PlatformWallet      string // 平台收款钱包（预留）
 	SolanaRPC           string // Solana RPC 节点
 	BSCRPC              string // BSC RPC 节点
 	LaunchServiceURL    string // Launch Service 微服务地址

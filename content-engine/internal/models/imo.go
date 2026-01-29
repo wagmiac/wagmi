@@ -43,6 +43,7 @@ type Project struct {
 	Description string        `json:"description" gorm:"type:text"`                        // 项目描述
 	Website     string        `json:"website" gorm:"type:text"`                            // 官网链接
 	Twitter     string        `json:"twitter" gorm:"type:text"`                            // Twitter 链接
+	Telegram    string        `json:"telegram" gorm:"type:text"`                           // Telegram 链接
 	Github      string        `json:"github" gorm:"type:text"`                             // GitHub 链接
 	ProductHunt string        `json:"product_hunt" gorm:"type:text"`                       // Product Hunt 链接
 	Discord     string        `json:"discord" gorm:"type:text"`                            // Discord 链接
@@ -94,6 +95,10 @@ type Project struct {
 
 	// 评估状态
 	IsEvaluating bool `json:"is_evaluating" gorm:"default:false"` // 是否正在评估中
+
+	// AI 评估缓存
+	EvalOverallGrade string `json:"eval_overall_grade" gorm:"type:varchar(5)"` // 综合评级缓存 S/A/B/C/D
+	EvalSummary      string `json:"eval_summary" gorm:"type:text"`             // 评估摘要缓存
 
 	// GitHub 热度数据（缓存）
 	GithubStars        int        `json:"github_stars" gorm:"default:0"`
@@ -264,6 +269,7 @@ type LaunchOrder struct {
 	// 发射配置
 	Chain     Chain     `json:"chain" gorm:"type:varchar(20);not null"`
 	Launchpad Launchpad `json:"launchpad" gorm:"type:varchar(50);not null"`
+	TaxRate   int       `json:"tax_rate" gorm:"type:int;default:0"` // flap.sh 税率（基点，0=无税，100=1%，300=3%）
 
 	// 首单购买金额
 	FirstBuyAmount float64 `json:"first_buy_amount" gorm:"type:decimal(20,8);not null"` // 首单购买金额

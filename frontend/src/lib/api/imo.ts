@@ -97,6 +97,7 @@ export async function createProject(data: {
   logo?: string;
   description?: string;
   twitter?: string;
+  telegram?: string;  // Telegram 链接
   github?: string;
   website?: string;
   productHunt?: string; // Product Hunt 链接
@@ -118,6 +119,7 @@ export async function updateProject(projectId: string, data: {
   logo?: string;
   description?: string;
   twitter?: string;
+  telegram?: string;  // Telegram 链接
   github?: string;
   website?: string;
   productHunt?: string;
@@ -411,6 +413,7 @@ export interface LaunchWithPaymentRequest {
   firstBuyAmount: number;
   userWallet: string;
   paymentTxHash: string;
+  taxRate?: number;  // flap.sh 专属：税率（基点，0=无税，100=1%，300=3%）
 }
 
 export async function launchWithPayment(projectId: string, data: LaunchWithPaymentRequest) {

@@ -13,7 +13,7 @@ import {
   LAUNCHPAD_CONFIG,
   Project 
 } from "@/types/imo";
-import { getProjectByTicker, launchWithPayment } from "@/lib/api/imo";
+import { getProjectByTicker, launchWithPayment, generateDevWallet, getDevWallet } from "@/lib/api/imo";
 
 type LaunchStep = "loading" | "not-available" | "configure" | "launching" | "success";
 
@@ -31,6 +31,10 @@ export default function LaunchPage() {
   const [selectedChain, setSelectedChain] = useState<Chain>("solana");
   const [selectedLaunchpad, setSelectedLaunchpad] = useState<Launchpad>("pump.fun");
   const [firstBuyAmount, setFirstBuyAmount] = useState<string>("0.1");
+  const [devWalletAddress, setDevWalletAddress] = useState<string | null>(null);
+  const [isLoadingWallet, setIsLoadingWallet] = useState(false);
+  // flap.sh 专属：税率选项（基点，100=1%, 300=3%）
+  const [taxRate, setTaxRate] = useState<number>(0);
   
   // 发射结果
   const [launchResult, setLaunchResult] = useState<{
@@ -70,6 +74,9 @@ export default function LaunchPage() {
           } else if (proj.status !== "discovering" && proj.status !== "launching") {
             setError("该项目当前状态不可发射");
             setStep("not-available");
+          } else if (!proj.logo) {
+            setError("项目缺少 Logo 图片，请先在项目详情页上传图片");
+            setStep("not-available");
           } else {
             // 设置默认链
             if (proj.chain) {
@@ -102,7 +109,51 @@ export default function LaunchPage() {
     }
     // 更新最小金额
     setFirstBuyAmount(CHAIN_CONFIG[selectedChain].minFirstBuy.toString());
+    // 重置 DevWallet（链或发射台改变时需要重新获取）
+    setDevWalletAddress(null);
   }, [selectedChain, selectedLaunchpad]);
+
+  // 当发射台改变时，获取或生成 DevWallet
+  useEffect(() => {
+    if (!project || step !== "configure") return;
+    
+    async function loadDevWallet() {
+      setIsLoadingWallet(true);
+      setError(null);
+      try {
+        // 先尝试获取已有的钱包
+        let res = await getDevWallet(project!.id, selectedLaunchpad);
+        
+        if (res.success && res.data) {
+          const walletData = res.data as { address?: string } | Record<string, { address?: string }>;
+          // 可能返回单个钱包对象或所有钱包的 map
+          const addr = (walletData as { address?: string }).address || 
+                      (walletData as Record<string, { address?: string }>)[selectedLaunchpad]?.address;
+          if (addr) {
+            setDevWalletAddress(addr);
+            setIsLoadingWallet(false);
+            return;
+          }
+        }
+        
+        // 没有钱包，生成新的
+        res = await generateDevWallet(project!.id, selectedLaunchpad);
+        if (res.success && res.data) {
+          const data = res.data as { address: string };
+          setDevWalletAddress(data.address);
+        } else {
+          setError("获取收款地址失败：" + (res.error || res.message));
+        }
+      } catch (err) {
+        console.error("Load dev wallet error:", err);
+        setError("获取收款地址失败");
+      } finally {
+        setIsLoadingWallet(false);
+      }
+    }
+    
+    loadDevWallet();
+  }, [project, selectedLaunchpad, step]);
 
   // 连接钱包
   async function handleConnectWallet() {
@@ -127,15 +178,18 @@ export default function LaunchPage() {
       setError(`请先连接 ${selectedChain === "solana" ? "Phantom" : "MetaMask"} 钱包`);
       return;
     }
+
+    if (!devWalletAddress) {
+      setError("收款地址未就绪，请稍候再试");
+      return;
+    }
     
     setIsLoading(true);
     setError(null);
     
     try {
-      // 获取系统收款地址
-      const receiverAddress = selectedChain === "solana" 
-        ? process.env.NEXT_PUBLIC_SOL_RECEIVER || "YOUR_SOL_RECEIVER_ADDRESS"
-        : process.env.NEXT_PUBLIC_BNB_RECEIVER || "YOUR_BNB_RECEIVER_ADDRESS";
+      // 使用项目在该发射台的 DevWallet 作为收款地址
+      const receiverAddress = devWalletAddress;
       
       // 弹出钱包进行转账
       const transferResult = await sendTransfer({
@@ -150,6 +204,10 @@ export default function LaunchPage() {
         return;
       }
 
+      // 使用实际转账的钱包地址（可能与存储的不同，因为用户可能切换了账户）
+      const actualUserWallet = transferResult.fromAddress || currentWallet!.address;
+      console.log("Payment successful, user wallet:", actualUserWallet);
+
       // 支付成功，调用后端发射接口
       setStep("launching");
       
@@ -157,8 +215,10 @@ export default function LaunchPage() {
         chain: selectedChain,
         launchpad: selectedLaunchpad,
         firstBuyAmount: amount,
-        userWallet: currentWallet!.address,
+        userWallet: actualUserWallet,
         paymentTxHash: transferResult.txHash!,
+        // flap.sh 税率（0=无税，100=1%，300=3%）
+        taxRate: selectedLaunchpad === "flap.sh" ? taxRate : undefined,
       });
 
       if (res.success && res.data) {
@@ -270,6 +330,38 @@ export default function LaunchPage() {
                   ))}
                 </div>
               </div>
+              
+              {/* flap.sh 专属：税率设置 */}
+              {selectedLaunchpad === "flap.sh" && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    交易税率（可选）
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { value: 0, label: "无税" },
+                      { value: 100, label: "1%" },
+                      { value: 300, label: "3%" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setTaxRate(option.value)}
+                        className={`p-3 rounded-lg border transition text-center ${
+                          taxRate === option.value 
+                            ? "border-[#FF8C00] bg-[#FF8C00]/10 text-[#FF8C00]" 
+                            : "border-white/10 text-gray-300 hover:border-white/30"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    交易税将自动转入项目开发钱包，用于持续发展
+                  </p>
+                </div>
+              )}
               
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-400 mb-2">
