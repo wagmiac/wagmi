@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/components/ui/Toast";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
 // 价格配置
 const PRICE_PER_CREDIT = 99;
@@ -38,7 +38,7 @@ export default function BuyCreditsPage() {
   // 获取当前积分
   useEffect(() => {
     if (token) {
-      fetch(`${API_BASE}/api/evaluator/credits`, {
+      fetch(`${API_BASE}/evaluator/credits`, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then(res => res.json())
@@ -59,7 +59,7 @@ export default function BuyCreditsPage() {
     setPromoValidation(null);
 
     try {
-      const res = await fetch(`${API_BASE}/api/evaluator/promo/validate?code=${encodeURIComponent(promoCode)}`);
+      const res = await fetch(`${API_BASE}/evaluator/promo/validate?code=${encodeURIComponent(promoCode)}`);
       const data = await res.json();
 
       if (!res.ok) {
@@ -102,7 +102,7 @@ export default function BuyCreditsPage() {
     setCreating(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/evaluator/orders`, {
+      const res = await fetch(`${API_BASE}/evaluator/orders`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

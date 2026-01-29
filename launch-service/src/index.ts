@@ -5,9 +5,9 @@
  * Go 后端通过 HTTP 调用此服务来执行代币发射操作
  */
 
-// 首先加载 .env 文件，确保环境变量在使用前就绑定
-import { config as loadEnv } from 'dotenv';
-loadEnv();
+// ⚠️ 必须最先导入 env.ts，确保 .env 在其他模块读取 process.env 之前加载
+// ES 模块的 import 会被 hoisted，所以必须用单独模块来保证加载顺序
+import './env.js';
 
 // 然后配置全局代理，确保所有 fetch 请求都走代理
 import { ProxyAgent, setGlobalDispatcher } from 'undici';

@@ -36,7 +36,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
   const fetchComments = useCallback(async (isLoadMore = false) => {
     try {
       setLoading(true);
-      const API_URL = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
       const res = await fetch(`${API_URL}/imo/projects/${projectId}/comments?page=${page}&limit=20`);
       if (res.ok) {
         const data = await res.json();
@@ -70,7 +70,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
 
     try {
       setSubmitting(true);
-      const API_URL = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
       const res = await fetch(`${API_URL}/imo/projects/${projectId}/comments`, {
         method: 'POST',
         headers: {
@@ -108,7 +108,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
     if (!token) return;
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
       const res = await fetch(`${API_URL}/imo/projects/${projectId}/comments/${commentId}`, {
         method: 'DELETE',
         headers: {

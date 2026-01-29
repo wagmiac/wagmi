@@ -847,7 +847,7 @@ func (s *LaunchService) callLaunchServiceAPI(endpoint string, jsonData []byte) (
 
 	// 生成签名
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	
+
 	// 对 JSON body 进行签名
 	secret := s.cfg.LaunchServiceSecret
 	if secret == "" {

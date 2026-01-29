@@ -9,7 +9,7 @@ interface FavoriteButtonProps {
   showCount?: boolean;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 export default function FavoriteButton({ contentId, size = 'md', showCount = true }: FavoriteButtonProps) {
   const { user, token, openLogin } = useAuth();

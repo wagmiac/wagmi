@@ -7,7 +7,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useI18n } from "@/lib/i18n";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
 interface PHProduct {
   id: string;
@@ -74,7 +74,7 @@ export default function ShareEvaluationPage() {
 
   const fetchEvaluation = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/evaluator/evaluations/${evaluationId}`);
+      const res = await fetch(`${API_BASE}/evaluator/evaluations/${evaluationId}`);
       if (!res.ok) {
         throw new Error("Evaluation not found");
       }

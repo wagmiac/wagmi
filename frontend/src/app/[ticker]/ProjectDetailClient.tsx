@@ -58,7 +58,7 @@ export default function ProjectDetailClient({ project }: ProjectDetailClientProp
   const fetchEvaluation = useCallback(async () => {
     try {
       setEvaluationLoading(true);
-      const API_URL = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
       const res = await fetch(`${API_URL}/imo/projects/${project.id}/evaluation`);
       if (res.ok) {
         const data = await res.json();
@@ -83,7 +83,7 @@ export default function ProjectDetailClient({ project }: ProjectDetailClientProp
     
     try {
       setIsReEvaluating(true);
-      const API_URL = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
       const res = await fetch(`${API_URL}/imo/projects/${project.id}/evaluate`, {
         method: 'POST',
         headers: {

@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/components/ui/Toast";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
 // 支持的支付链
 const PAYMENT_CHAINS = [
@@ -63,7 +63,7 @@ export default function PaymentPage() {
     if (!token || !orderId) return;
 
     try {
-      const res = await fetch(`${API_BASE}/api/evaluator/orders/${orderId}`, {
+      const res = await fetch(`${API_BASE}/evaluator/orders/${orderId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -142,7 +142,7 @@ export default function PaymentPage() {
 
     setConfirming(true);
     try {
-      const res = await fetch(`${API_BASE}/api/evaluator/orders/${orderId}/confirm`, {
+      const res = await fetch(`${API_BASE}/evaluator/orders/${orderId}/confirm`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

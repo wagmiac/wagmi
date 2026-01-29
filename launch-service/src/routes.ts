@@ -358,6 +358,11 @@ router.get('/balance/:chain/:address', async (req: Request, res: Response) => {
       res.status(400).json({ success: false, error: 'Invalid chain' });
       return;
     }
+
+    if (Array.isArray(address)) {
+      res.status(400).json({ success: false, error: 'Invalid address parameter' });
+      return;
+    }
     
     const balance = await getNativeBalance(chain, address);
     res.json({ success: true, balance });

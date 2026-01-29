@@ -32,7 +32,7 @@ export function HeatStats({ projectId, githubUrl }: HeatStatsProps) {
 
       try {
         setLoading(true);
-        const API_URL = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
         const res = await fetch(`${API_URL}/imo/projects/${projectId}/github`);
         if (res.ok) {
           const data = await res.json();

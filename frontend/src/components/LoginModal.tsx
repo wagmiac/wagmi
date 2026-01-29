@@ -13,7 +13,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  const API_BASE = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
   // 处理 OAuth 回调（从 URL 参数中获取 token）
   const handleOAuthCallback = useCallback(() => {

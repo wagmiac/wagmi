@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { useToast } from "@/components/ui/Toast";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
 interface Setting {
   key: string;
@@ -65,7 +65,7 @@ export default function SettingsPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/settings`, {
+      const res = await fetch(`${API_BASE}/settings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -139,7 +139,7 @@ export default function SettingsPage() {
     if (!token) return;
     setSaving(key);
     try {
-      const res = await fetch(`${API_BASE}/api/settings/${key}`, {
+      const res = await fetch(`${API_BASE}/settings/${key}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,

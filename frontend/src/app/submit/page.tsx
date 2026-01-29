@@ -106,12 +106,22 @@ export default function SubmitProjectPage() {
       }
 
       const { message } = nonceResult.data as { nonce: string; message: string };
+      console.log("IMO Auth: Got nonce, requesting signature...");
 
-      // 2. 签名
-      const signature = await signMessage(message, walletChain || "solana");
-      if (!signature) {
-        throw new Error("签名被拒绝");
+      // 2. 签名（可能会抛出异常）
+      let signature: string | null = null;
+      try {
+        signature = await signMessage(message, walletChain || "solana");
+      } catch (signError) {
+        console.error("IMO Auth: Sign message error:", signError);
+        throw signError;
       }
+      
+      if (!signature) {
+        throw new Error("签名被拒绝或失败");
+      }
+      
+      console.log("IMO Auth: Got signature, verifying...");
 
       // 3. 验证签名
       const verifyResult = await verifyWallet({
@@ -128,16 +138,18 @@ export default function SubmitProjectPage() {
       if (token) {
         setIMOToken(token);
         setImoAuthenticated(true);
+        console.log("IMO Auth: Success!");
         return true;
       }
 
       throw new Error("未获取到认证令牌");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "认证失败";
-      if (message.includes("rejected") || message.includes("拒绝")) {
+      console.error("IMO Auth error:", err);
+      const errorMessage = err instanceof Error ? err.message : "认证失败";
+      if (errorMessage.includes("rejected") || errorMessage.includes("拒绝") || errorMessage.includes("User rejected")) {
         setError("您取消了签名请求");
       } else {
-        setError(message);
+        setError(errorMessage);
       }
       return false;
     } finally {
@@ -245,7 +257,7 @@ export default function SubmitProjectPage() {
   function validateForm(): string | null {
     if (!formData.name.trim()) return "请输入项目名称";
     if (!formData.ticker.trim()) return "请输入代币符号";
-    if (formData.ticker.length > 10) return "代币符号最多10个字符";
+    if (formData.ticker.length > 20) return "代币符号最多20个字符";
     if (!/^[A-Z0-9]+$/i.test(formData.ticker)) return "代币符号只能包含字母和数字";
     if (!formData.description.trim()) return "请输入项目描述";
     if (formData.description.length < 20) return "项目描述至少20个字符";
@@ -509,7 +521,7 @@ export default function SubmitProjectPage() {
                     value={formData.ticker}
                     onChange={handleChange}
                     placeholder="如：CURSOR"
-                    maxLength={10}
+                    maxLength={20}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#FF8C00]/50 uppercase"
                   />
                 </div>

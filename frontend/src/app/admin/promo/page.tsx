@@ -6,7 +6,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import Dropdown from "@/components/ui/Dropdown";
 import { useToast } from "@/components/ui/Toast";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
 interface PromoCode {
   id: string;
@@ -50,7 +50,7 @@ export default function PromoManagementPage() {
     setLoading(true);
     try {
       const res = await fetch(
-        `${API_BASE}/api/admin/promo?show_used=${showUsed}&page_size=100`,
+        `${API_BASE}/admin/promo?show_used=${showUsed}&page_size=100`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const data = await res.json();
@@ -72,8 +72,8 @@ export default function PromoManagementPage() {
     setCreating(true);
     try {
       const endpoint = createForm.count > 1 
-        ? `${API_BASE}/api/admin/promo/batch`
-        : `${API_BASE}/api/admin/promo`;
+        ? `${API_BASE}/admin/promo/batch`
+        : `${API_BASE}/admin/promo`;
       
       const body = createForm.count > 1
         ? { ...createForm }
@@ -119,7 +119,7 @@ export default function PromoManagementPage() {
   const deleteCode = async (id: string) => {
     if (!confirm("确定删除此优惠码？")) return;
     try {
-      await fetch(`${API_BASE}/api/admin/promo/${id}`, {
+      await fetch(`${API_BASE}/admin/promo/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -137,7 +137,7 @@ export default function PromoManagementPage() {
     }
     setGifting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/admin/promo/gift`, {
+      const res = await fetch(`${API_BASE}/admin/promo/gift`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

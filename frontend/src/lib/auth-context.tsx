@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, startTransition } from 'react';
 
-const API_BASE = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 export interface User {
   id: string;
@@ -54,8 +54,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     startTransition(() => {
       if (savedToken && savedUser) {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser));
+        // 检查 token 是否过期
+        try {
+          const payload = JSON.parse(atob(savedToken.split('.')[1]));
+          const exp = payload.exp * 1000; // 转换为毫秒
+          if (Date.now() >= exp) {
+            // Token 已过期，清除登录状态
+            console.log('Token expired, logging out...');
+            localStorage.removeItem('wagmi_token');
+            localStorage.removeItem('wagmi_user');
+          } else {
+            setToken(savedToken);
+            setUser(JSON.parse(savedUser));
+          }
+        } catch {
+          // 解析失败，清除登录状态
+          localStorage.removeItem('wagmi_token');
+          localStorage.removeItem('wagmi_user');
+        }
       }
       setLoading(false);
     });
@@ -160,9 +176,9 @@ export function useAuth() {
   return context;
 }
 
-// API 请求辅助函数
+// API 请求辅助函数（自动处理 401 登出）
 export function useAuthFetch() {
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
 
   return useCallback(async (url: string, options: RequestInit = {}) => {
     const headers: Record<string, string> = {
@@ -179,6 +195,14 @@ export function useAuthFetch() {
       headers,
     });
 
+    // 401 表示 token 无效或过期，自动登出
+    if (res.status === 401) {
+      console.log('Received 401, token expired or invalid, logging out...');
+      logout();
+      // 可以选择跳转到登录页或显示登录弹窗
+      throw new Error('登录已过期，请重新登录');
+    }
+
     return res.json();
-  }, [token]);
+  }, [token, logout]);
 }

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 // 从 API URL 中提取基础 URL（去掉 /api 后缀）
-const API_URL = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 const API_BASE_URL = API_URL.replace(/\/api$/, '');
 
 const nextConfig: NextConfig = {

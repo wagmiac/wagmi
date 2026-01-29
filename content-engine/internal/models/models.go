@@ -108,11 +108,12 @@ type User struct {
 	ID string `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 
 	// 登录方式 (可多种并存)
-	Email         string `json:"email" gorm:"type:varchar(200);uniqueIndex"`          // Google 登录
-	GoogleID      string `json:"google_id" gorm:"type:varchar(100);uniqueIndex"`      // Google ID
-	TwitterID     string `json:"twitter_id" gorm:"type:varchar(100);uniqueIndex"`     // X 登录
+	// 注意：唯一索引在数据库中手动创建为条件索引，只对非空值生效
+	Email         string `json:"email" gorm:"type:varchar(200);index"`                // Google 登录
+	GoogleID      string `json:"google_id" gorm:"type:varchar(100);index"`            // Google ID
+	TwitterID     string `json:"twitter_id" gorm:"type:varchar(100);index"`           // X 登录
 	TwitterHandle string `json:"twitter_handle" gorm:"type:varchar(100)"`             // @username
-	WalletAddress string `json:"wallet_address" gorm:"type:varchar(100);uniqueIndex"` // Web3 钱包
+	WalletAddress string `json:"wallet_address" gorm:"type:varchar(100);uniqueIndex"` // Web3 钱包（主要登录方式，保留唯一索引）
 	WalletType    string `json:"wallet_type" gorm:"type:varchar(50)"`                 // phantom/metamask/okx/walletconnect/coinbase
 	ChainType     string `json:"chain_type" gorm:"type:varchar(20)"`                  // evm/solana
 

@@ -318,26 +318,45 @@ export function MultiWalletProvider({ children }: { children: ReactNode }) {
    */
   const signMessage = useCallback(async (message: string, chain?: Chain): Promise<string | null> => {
     const targetChain = chain || state.activeChain;
-    if (!targetChain) return null;
+    if (!targetChain) {
+      console.error("signMessage: No target chain specified");
+      return null;
+    }
 
     const wallet = state.wallets.find((w) => w.chain === targetChain);
-    if (!wallet) return null;
+    if (!wallet) {
+      console.error("signMessage: No wallet found for chain", targetChain);
+      return null;
+    }
 
     try {
       if (wallet.chain === "solana") {
         const solana = (window as WindowWithSolana).solana;
-        if (solana) {
-          const encodedMessage = new TextEncoder().encode(message);
-          const signedMessage = await solana.signMessage(encodedMessage, "utf8");
-          return Buffer.from(signedMessage.signature).toString("base64");
+        if (!solana) {
+          console.error("signMessage: Solana wallet not found in window");
+          throw new Error("钱包未安装或未授权");
         }
+        
+        // 确保钱包已连接
+        if (!solana.isConnected) {
+          console.log("signMessage: Wallet not connected, reconnecting...");
+          await solana.connect();
+        }
+        
+        console.log("signMessage: Requesting signature for Solana wallet...");
+        const encodedMessage = new TextEncoder().encode(message);
+        const signedMessage = await solana.signMessage(encodedMessage, "utf8");
+        console.log("signMessage: Signature received");
+        return Buffer.from(signedMessage.signature).toString("base64");
       } else if (wallet.chain === "bsc") {
         const ethereum = (window as WindowWithEthereum).ethereum;
         if (ethereum && wallet.address) {
+          console.log("signMessage: Requesting signature for BSC wallet...");
           const signature = await ethereum.request({
             method: "personal_sign",
             params: [message, wallet.address],
           });
+          console.log("signMessage: Signature received");
           return signature as string;
         }
       }
@@ -346,7 +365,8 @@ export function MultiWalletProvider({ children }: { children: ReactNode }) {
       return "mock_signature_" + Date.now();
     } catch (error) {
       console.error("Failed to sign message:", error);
-      return null;
+      // 重新抛出错误，让调用者知道发生了什么
+      throw error;
     }
   }, [state.activeChain, state.wallets]);
 

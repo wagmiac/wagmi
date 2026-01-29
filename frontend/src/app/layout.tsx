@@ -16,7 +16,7 @@ const inter = Inter({
   display: "swap", // 防止字体加载阻塞渲染
 });
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://wagmi.fun';
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://wagmi.ac';
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),

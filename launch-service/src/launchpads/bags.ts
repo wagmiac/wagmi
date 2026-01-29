@@ -20,6 +20,7 @@ import {
   LAMPORTS_PER_SOL, 
   PublicKey,
 } from '@solana/web3.js';
+// @ts-ignore - bags-sdk 没有类型声明
 import { BagsSDK, WRAPPED_SOL_MINT } from '@bagsfm/bags-sdk';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import nodeFetch, { RequestInit as NodeFetchRequestInit } from 'node-fetch';

@@ -36,7 +36,7 @@ cp .env.example .env.local
 编辑 `.env.local`：
 
 ```env
-NEXT_PUBLIC_CONTENT_API_URL=http://localhost:8080/api
+NEXT_PUBLIC_API_URL=http://localhost:8080/api
 ```
 
 ### 3. 启动开发服务器
@@ -98,7 +98,7 @@ pm2 start npm --name "wagmi-frontend" -- start
 
 | 变量名 | 说明 | 示例 |
 |-------|------|------|
-| `NEXT_PUBLIC_CONTENT_API_URL` | 后端 API 地址 | `http://localhost:8080/api` |
+| `NEXT_PUBLIC_API_URL` | 后端 API 地址 | `http://localhost:8080/api` |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | WalletConnect 项目 ID | `your_project_id` |
 
 ## 开发指南

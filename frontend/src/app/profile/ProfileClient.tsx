@@ -9,7 +9,7 @@ import ViewHistory from '@/components/ViewHistory';
 import UserBadges from '@/components/UserBadges';
 import { useAuth } from '@/lib/auth-context';
 
-const API_BASE = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 interface UserComment {
   id: number;

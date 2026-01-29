@@ -3,7 +3,7 @@
  * 替代原来的 JSON 文件存储
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_CONTENT_API_URL || 'http://localhost:8080/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 export interface Token {
   id: string;

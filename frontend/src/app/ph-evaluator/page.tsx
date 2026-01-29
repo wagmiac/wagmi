@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/components/ui/Toast";
 
 // API 基础 URL
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
 // 类型定义
 interface PHProduct {
@@ -81,7 +81,7 @@ export default function PHEvaluatorPage() {
   const fetchCredits = async () => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_BASE}/api/evaluator/credits`, {
+      const res = await fetch(`${API_BASE}/evaluator/credits`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -105,7 +105,7 @@ export default function PHEvaluatorPage() {
     setEvaluation(null);
 
     try {
-      const res = await fetch(`${API_BASE}/api/evaluator/fetch?url=${encodeURIComponent(phUrl)}`);
+      const res = await fetch(`${API_BASE}/evaluator/fetch?url=${encodeURIComponent(phUrl)}`);
       const data = await res.json();
       
       if (!res.ok) {
@@ -138,7 +138,7 @@ export default function PHEvaluatorPage() {
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE}/api/evaluator/evaluate`, {
+      const res = await fetch(`${API_BASE}/evaluator/evaluate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

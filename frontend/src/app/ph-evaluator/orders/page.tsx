@@ -7,7 +7,7 @@ import Footer from "@/components/Footer";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
 interface PaymentOrder {
   id: string;
@@ -66,7 +66,7 @@ export default function OrdersPage() {
       setLoading(true);
       try {
         // 获取积分
-        const creditsRes = await fetch(`${API_BASE}/api/evaluator/credits`, {
+        const creditsRes = await fetch(`${API_BASE}/evaluator/credits`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (creditsRes.ok) {
@@ -75,7 +75,7 @@ export default function OrdersPage() {
         }
 
         // 获取订单
-        const ordersRes = await fetch(`${API_BASE}/api/evaluator/orders`, {
+        const ordersRes = await fetch(`${API_BASE}/evaluator/orders`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (ordersRes.ok) {
@@ -84,7 +84,7 @@ export default function OrdersPage() {
         }
 
         // 获取交易记录
-        const txRes = await fetch(`${API_BASE}/api/evaluator/credits/transactions`, {
+        const txRes = await fetch(`${API_BASE}/evaluator/credits/transactions`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (txRes.ok) {
