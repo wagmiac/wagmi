@@ -10,6 +10,10 @@
   <a href="https://t.me/wagmiac">Telegram</a>
 </p>
 
+<p align="center">
+  中文 | <a href="./README_EN.md">English</a>
+</p>
+
 ---
 
 ## 📖 项目简介
