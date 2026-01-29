@@ -1,0 +1,302 @@
+/**
+ * Pump.fun 发射台集成
+ * 使用内置的 PumpFunSDK（移除了对外部 SDK 的依赖）
+ */
+
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
+import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
+import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import nodeFetch, { RequestInit as NodeFetchRequestInit } from 'node-fetch';
+
+// 使用内置 SDK
+import { 
+  PumpFunSDK, 
+  DEFAULT_DECIMALS, 
+  type CreateTokenMetadata, 
+  type TransactionResult 
+} from '../pumpfun-sdk/index.js';
+
+import { CONFIG } from '../config.js';
+import type { 
+  TokenMetadata, 
+  CreateTokenResponse, 
+  BuyTokenResponse, 
+  SellTokenResponse 
+} from '../types.js';
+
+/**
+ * Pump.fun 发射服务
+ */
+export class PumpFunLauncher {
+  private connection: Connection;
+
+  constructor() {
+    // 如果配置了代理，使用代理连接
+    if (CONFIG.httpProxy) {
+      const agent = new HttpsProxyAgent(CONFIG.httpProxy);
+      this.connection = new Connection(CONFIG.solanaRpcUrl, {
+        commitment: 'confirmed',
+        fetch: async (url, options) => {
+          const fetchOptions: NodeFetchRequestInit = {
+            method: options?.method,
+            headers: options?.headers as Record<string, string>,
+            body: options?.body as string | Buffer | undefined,
+            agent,
+          };
+          return nodeFetch(url as string, fetchOptions) as unknown as Response;
+        },
+      });
+      console.log('[PumpFun] Using proxy:', CONFIG.httpProxy);
+    } else {
+      this.connection = new Connection(CONFIG.solanaRpcUrl, 'confirmed');
+    }
+  }
+
+  /**
+   * 初始化 SDK（需要钱包）
+   */
+  private initSDK(wallet: Keypair): PumpFunSDK {
+    const provider = new AnchorProvider(
+      this.connection,
+      new Wallet(wallet),
+      { commitment: 'confirmed' }
+    );
+    
+    return new PumpFunSDK(provider);
+  }
+
+  /**
+   * 从十六进制私钥创建 Keypair
+   */
+  private keypairFromHex(hexPrivateKey: string): Keypair {
+    const privateKeyBytes = Buffer.from(hexPrivateKey, 'hex');
+    return Keypair.fromSecretKey(privateKeyBytes);
+  }
+
+  /**
+   * 创建代币并初始买入
+   */
+  async createAndBuy(
+    metadata: TokenMetadata,
+    creatorPrivateKeyHex: string,
+    initialBuyAmountSOL: number = 0.0001
+  ): Promise<CreateTokenResponse> {
+    try {
+      const creatorWallet = this.keypairFromHex(creatorPrivateKeyHex);
+      const sdk = this.initSDK(creatorWallet);
+      
+      // 生成新的 mint 地址
+      const mint = Keypair.generate();
+      
+      // 准备图片
+      let imageBlob: Blob | undefined;
+      if (metadata.image) {
+        if (metadata.image.startsWith('data:')) {
+          // Base64 图片
+          const base64Data = metadata.image.split(',')[1];
+          const buffer = Buffer.from(base64Data, 'base64');
+          imageBlob = new Blob([buffer], { type: 'image/png' });
+        } else if (metadata.image.startsWith('http')) {
+          // URL 图片，下载
+          const response = await fetch(metadata.image);
+          const arrayBuffer = await response.arrayBuffer();
+          imageBlob = new Blob([arrayBuffer], { type: 'image/png' });
+        }
+      }
+      
+      // 如果没有图片，创建一个空的占位图片
+      if (!imageBlob) {
+        // 创建一个简单的 1x1 像素的 PNG
+        const emptyPng = new Uint8Array([
+          0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+          0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+          0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00,
+          0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0xd7, 0x63, 0xf8, 0xff, 0xff, 0x3f,
+          0x00, 0x05, 0xfe, 0x02, 0xfe, 0xdc, 0xcc, 0x59, 0xe7, 0x00, 0x00, 0x00,
+          0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
+        ]);
+        imageBlob = new Blob([emptyPng], { type: 'image/png' });
+      }
+      
+      // 准备元数据
+      const tokenInfo: CreateTokenMetadata = {
+        name: metadata.name,
+        symbol: metadata.symbol,
+        description: metadata.description,
+        file: imageBlob,
+        twitter: metadata.twitter,
+        telegram: metadata.telegram,
+        website: metadata.website,
+      };
+      
+      // 执行创建和初始买入
+      const buyAmountLamports = BigInt(Math.floor(initialBuyAmountSOL * LAMPORTS_PER_SOL));
+      
+      console.log(`Creating token ${metadata.symbol} on pump.fun...`);
+      console.log(`  Creator: ${creatorWallet.publicKey.toBase58()}`);
+      console.log(`  Mint: ${mint.publicKey.toBase58()}`);
+      console.log(`  Initial buy: ${initialBuyAmountSOL} SOL`);
+      
+      const result: TransactionResult = await sdk.createAndBuy(
+        creatorWallet,
+        mint,
+        tokenInfo,
+        buyAmountLamports,
+        CONFIG.slippageBps,
+        CONFIG.priorityFee
+      );
+      
+      // pump.fun 的 createAndBuy 返回交易签名
+      const txHash = result.signature || '';
+      
+      if (result.success) {
+        console.log(`Token created successfully!`);
+        console.log(`  Token address: ${mint.publicKey.toBase58()}`);
+        console.log(`  TX: ${txHash}`);
+      } else {
+        console.error(`Token creation failed:`, result.error);
+      }
+      
+      return {
+        success: result.success,
+        tokenAddress: mint.publicKey.toBase58(),
+        createTxHash: txHash,
+        pumpFunUrl: `https://pump.fun/${mint.publicKey.toBase58()}`,
+        error: result.error ? String(result.error) : undefined,
+      };
+    } catch (error) {
+      console.error('Failed to create token on pump.fun:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * 获取 SPL 代币余额
+   */
+  private async getSPLBalance(mint: PublicKey, owner: PublicKey): Promise<bigint> {
+    try {
+      const ata = await getAssociatedTokenAddress(mint, owner);
+      const account = await getAccount(this.connection, ata);
+      return account.amount;
+    } catch {
+      return BigInt(0);
+    }
+  }
+
+  /**
+   * 买入代币
+   */
+  async buy(
+    tokenAddress: string,
+    buyerPrivateKeyHex: string,
+    amountSOL: number
+  ): Promise<BuyTokenResponse> {
+    try {
+      const buyerWallet = this.keypairFromHex(buyerPrivateKeyHex);
+      const sdk = this.initSDK(buyerWallet);
+      const mint = new PublicKey(tokenAddress);
+      
+      const buyAmountLamports = BigInt(Math.floor(amountSOL * LAMPORTS_PER_SOL));
+      
+      console.log(`Buying ${amountSOL} SOL worth of ${tokenAddress}...`);
+      
+      const result: TransactionResult = await sdk.buy(
+        buyerWallet,
+        mint,
+        buyAmountLamports,
+        CONFIG.slippageBps,
+        CONFIG.priorityFee
+      );
+      
+      const txHash = result.signature || '';
+      
+      // 获取代币余额
+      const balance = await this.getSPLBalance(mint, buyerWallet.publicKey);
+      
+      console.log(`Buy successful! TX: ${txHash}`);
+      console.log(`  Token balance: ${Number(balance) / 10 ** DEFAULT_DECIMALS}`);
+      
+      return {
+        success: result.success,
+        txHash,
+        tokenAmount: (Number(balance) / 10 ** DEFAULT_DECIMALS).toString(),
+        error: result.error ? String(result.error) : undefined,
+      };
+    } catch (error) {
+      console.error('Failed to buy token:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * 卖出代币
+   */
+  async sell(
+    tokenAddress: string,
+    sellerPrivateKeyHex: string,
+    tokenAmount: string
+  ): Promise<SellTokenResponse> {
+    try {
+      const sellerWallet = this.keypairFromHex(sellerPrivateKeyHex);
+      const sdk = this.initSDK(sellerWallet);
+      const mint = new PublicKey(tokenAddress);
+      
+      // 转换为最小单位 (6 decimals)
+      const sellAmount = BigInt(Math.floor(parseFloat(tokenAmount) * 10 ** DEFAULT_DECIMALS));
+      
+      console.log(`Selling ${tokenAmount} tokens of ${tokenAddress}...`);
+      
+      // 获取卖出前余额
+      const balanceBefore = await this.connection.getBalance(sellerWallet.publicKey);
+      
+      const result: TransactionResult = await sdk.sell(
+        sellerWallet,
+        mint,
+        sellAmount,
+        CONFIG.slippageBps,
+        CONFIG.priorityFee
+      );
+      
+      const txHash = result.signature || '';
+      
+      // 获取卖出后余额
+      const balanceAfter = await this.connection.getBalance(sellerWallet.publicKey);
+      const receivedSOL = (balanceAfter - balanceBefore) / LAMPORTS_PER_SOL;
+      
+      console.log(`Sell successful! TX: ${txHash}`);
+      console.log(`  Received: ${receivedSOL} SOL`);
+      
+      return {
+        success: result.success,
+        txHash,
+        receivedAmount: receivedSOL.toString(),
+        error: result.error ? String(result.error) : undefined,
+      };
+    } catch (error) {
+      console.error('Failed to sell token:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * 检查服务是否可用
+   */
+  async healthCheck(): Promise<boolean> {
+    try {
+      const slot = await this.connection.getSlot();
+      return slot > 0;
+    } catch {
+      return false;
+    }
+  }
+}

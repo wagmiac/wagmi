@@ -1,0 +1,38 @@
+{
+  "name": "wagmi-launch-service",
+  "version": "1.0.0",
+  "description": "WAGMI Launchpad Integration Service",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@bagsfm/bags-sdk": "^1.2.7",
+    "@coral-xyz/anchor": "0.30.1",
+    "@solana/spl-token": "0.4.14",
+    "@solana/web3.js": "1.98.0",
+    "bs58": "^6.0.0",
+    "cors": "2.8.5",
+    "dotenv": "16.4.5",
+    "ethers": "6.13.4",
+    "express": "4.21.2",
+    "global-agent": "^3.0.0",
+    "https-proxy-agent": "^7.0.6",
+    "node-fetch": "^3.3.2",
+    "undici": "^7.19.2",
+    "viem": "^2.45.0"
+  },
+  "devDependencies": {
+    "@types/cors": "2.8.17",
+    "@types/express": "5.0.0",
+    "@types/form-data": "^2.2.1",
+    "@types/node": "22.10.6",
+    "form-data": "^4.0.5",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3"
+  }
+}
