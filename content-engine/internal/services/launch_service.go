@@ -869,7 +869,7 @@ func (s *LaunchService) callLaunchServiceAPI(endpoint string, jsonData []byte) (
 	req.Header.Set("X-Timestamp", timestamp)
 
 	// 发送请求
-func (s *LaunchService) callLaunchServiceAPI(endpoint string, jsonData []byte) ([]byte, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call launch service: %w", err)

@@ -193,7 +193,9 @@ export default function IMOAdminPage() {
     try {
       const res = await getDevWallet(project.id);
       if (res.success && res.data) {
-        setWallets(res.data as Record<string, WalletInfo>);
+        // 后端返回 Record<launchpad, {address, launchpad}>
+        const walletsData = res.data as Record<string, WalletInfo>;
+        setWallets(walletsData);
       }
     } catch (error) {
       console.error("Failed to load wallets:", error);

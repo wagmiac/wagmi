@@ -422,7 +422,8 @@ export function MultiWalletProvider({ children }: { children: ReactNode }) {
         }
         
         // 创建转账交易 - 使用 Phantom 当前账户
-        const fromPubkey = currentPublicKey;
+        // 需要将 solana.publicKey 转换为 @solana/web3.js 的 PublicKey 类型
+        const fromPubkey = new PublicKey(currentAddress);
         const toPubkey = new PublicKey(params.to);
         const lamports = Math.floor(params.amount * LAMPORTS_PER_SOL);
         
@@ -513,36 +514,40 @@ export function MultiWalletProvider({ children }: { children: ReactNode }) {
           }
           
           // 方法2: signTransaction + 手动发送
-          console.log("Using signTransaction + manual send...");
-          const signed = await solana.signTransaction(transaction);
-          console.log("Transaction signed, sending via RPC...");
+          if (solana.signTransaction) {
+            console.log("Using signTransaction + manual send...");
+            const signed = await solana.signTransaction(transaction);
+            console.log("Transaction signed, sending via RPC...");
           
-          // 使用我们的 RPC 发送交易
-          let txHash: string | null = null;
-          let lastSendError: Error | null = null;
-          for (const rpcUrl of rpcUrls) {
-            try {
-              const connection = new Connection(rpcUrl, { 
-                commitment: "confirmed",
-                confirmTransactionInitialTimeout: 30000 
-              });
-              txHash = await connection.sendRawTransaction(signed.serialize(), {
-                skipPreflight: false,
-                preflightCommitment: "confirmed",
-              });
-              console.log("Transaction sent via:", rpcUrl.substring(0, 50), "txHash:", txHash);
-              break;
-            } catch (sendErr) {
-              console.warn(`Send via ${rpcUrl.substring(0, 50)} failed:`, sendErr);
-              lastSendError = sendErr as Error;
+            // 使用我们的 RPC 发送交易
+            let txHash: string | null = null;
+            let lastSendError: Error | null = null;
+            for (const rpcUrl of rpcUrls) {
+              try {
+                const connection = new Connection(rpcUrl, { 
+                  commitment: "confirmed",
+                  confirmTransactionInitialTimeout: 30000 
+                });
+                txHash = await connection.sendRawTransaction((signed as { serialize: () => Buffer }).serialize(), {
+                  skipPreflight: false,
+                  preflightCommitment: "confirmed",
+                });
+                console.log("Transaction sent via:", rpcUrl.substring(0, 50), "txHash:", txHash);
+                break;
+              } catch (sendErr) {
+                console.warn(`Send via ${rpcUrl.substring(0, 50)} failed:`, sendErr);
+                lastSendError = sendErr as Error;
+              }
             }
+          
+            if (!txHash) {
+              return { success: false, error: lastSendError?.message || "发送交易失败，请稍后重试" };
+            }
+          
+            return { success: true, txHash, fromAddress: currentAddress };
           }
           
-          if (!txHash) {
-            return { success: false, error: lastSendError?.message || "发送交易失败，请稍后重试" };
-          }
-          
-          return { success: true, txHash, fromAddress: currentAddress };
+          return { success: false, error: "钱包不支持签名交易" };
         } catch (signErr: unknown) {
           console.error("Sign/send error:", signErr);
           console.error("Sign error details:", JSON.stringify(signErr, Object.getOwnPropertyNames(signErr as object)));
@@ -761,9 +766,13 @@ interface WindowWithSolana extends Window {
   solana?: {
     isPhantom?: boolean;
     isSolflare?: boolean;
-    connect: () => Promise<{ publicKey: { toString: () => string } }>;
+    isConnected?: boolean;
+    publicKey?: { toString: () => string; toBytes: () => Uint8Array; toBase58: () => string };
+    connect: (options?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: { toString: () => string } }>;
     disconnect: () => Promise<void>;
     signMessage: (message: Uint8Array, encoding: string) => Promise<{ signature: Uint8Array }>;
+    signTransaction?: (transaction: unknown) => Promise<unknown>;
+    signAndSendTransaction?: (transaction: unknown, options?: { skipPreflight?: boolean; preflightCommitment?: string }) => Promise<{ signature: string }>;
   };
 }
 

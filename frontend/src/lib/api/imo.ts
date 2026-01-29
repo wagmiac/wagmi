@@ -1,4 +1,6 @@
 // IMO API 服务
+import type { Project } from '@/types/imo';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 // IMO Token 存储 key
@@ -78,7 +80,7 @@ export async function listProjects(params: ListProjectsParams = {}) {
     }
   });
   
-  return request(`/imo/projects?${searchParams.toString()}`);
+  return request<Project[]>(`/imo/projects?${searchParams.toString()}`);
 }
 
 export async function getProjectByTicker(ticker: string) {
@@ -267,9 +269,16 @@ export async function listLaunchingProjects() {
   return request('/imo/admin/launching');
 }
 
+// Dev 钱包响应类型
+interface DevWalletResponse {
+  address: string;
+  chain?: string;
+  launchpad: string;
+}
+
 // 为指定发射台生成 Dev 钱包
 export async function generateDevWallet(projectId: string, launchpad: string) {
-  return request(`/imo/admin/projects/${projectId}/generate-wallet`, {
+  return request<DevWalletResponse>(`/imo/admin/projects/${projectId}/generate-wallet`, {
     method: 'POST',
     body: JSON.stringify({ launchpad }),
   });
@@ -280,7 +289,8 @@ export async function getDevWallet(projectId: string, launchpad?: string) {
   const url = launchpad 
     ? `/imo/admin/projects/${projectId}/wallet?launchpad=${launchpad}`
     : `/imo/admin/projects/${projectId}/wallet`;
-  return request(url);
+  // 如果指定 launchpad，返回单个钱包；否则返回 Record<launchpad, wallet>
+  return request<Record<string, DevWalletResponse> | DevWalletResponse>(url);
 }
 
 // 导出发射台钱包私钥（仅管理员）
