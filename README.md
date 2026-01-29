@@ -1,175 +1,175 @@
-# WAGMI - Web3 创意代币化平台
+# WAGMI - Web3 Creative Tokenization Platform
 
 <p align="center">
-  <strong>🚀 让每一个创意都能被看见，让每一份贡献都能被回报</strong>
+  <strong>🚀 Let every idea be seen, let every contribution be rewarded</strong>
 </p>
 
 <p align="center">
-  <a href="https://wagmi.ac">官网</a> •
+  <a href="https://wagmi.ac">Website</a> •
   <a href="https://twitter.com/wagmiac">Twitter</a> •
   <a href="https://t.me/wagmiac">Telegram</a>
 </p>
 
 <p align="center">
-  中文 | <a href="./README_EN.md">English</a>
+  English | <a href="./README_CN.md">中文</a>
 </p>
 
 ---
 
-## 📖 项目简介
+## 📖 Introduction
 
-WAGMI 是一个社区驱动的 Web3 创意代币化平台，核心理念是**让社区可以给任何有潜力的项目发行 Meme 代币**。
+WAGMI is a community-driven Web3 creative tokenization platform. Our core philosophy is **empowering communities to launch Meme tokens for any promising project**.
 
-通过创新的 IMO (Initial Meme Offering) 机制，WAGMI 实现了：
-- 🔍 **发掘好项目** - 伯乐发现并提交有潜力的项目
-- 🚀 **一键发射代币** - 支持多链多平台代币发射
-- 💰 **收益公平分配** - Creator 70%, Scout 10%, Platform 20%
-- 🎯 **社区共同受益** - 让早期参与者分享项目成长
+Through our innovative IMO (Initial Meme Offering) mechanism, WAGMI enables:
+- 🔍 **Discover Projects** - Scouts find and submit promising projects
+- 🚀 **One-Click Token Launch** - Multi-chain, multi-platform token launches
+- 💰 **Fair Revenue Distribution** - Creator 70%, Scout 10%, Platform 20%
+- 🎯 **Community Benefits** - Early participants share in project growth
 
-## 🌐 支持的链与发射台
+## 🌐 Supported Chains & Launchpads
 
-| 链 | 发射台 | 特性 |
+| Chain | Launchpad | Features |
 |---|---|---|
-| **Solana** | pump.fun | 主流 Meme 发射台 |
-| **Solana** | trends.fun | 趋势代币发射 |
-| **Solana** | bags.fm | 费用分成支持 |
-| **BSC** | flap.sh | 支持税率代币 (1%/3%) |
-| **BSC** | four.meme | BSC Meme 发射台 |
+| **Solana** | pump.fun | Leading Meme launchpad |
+| **Solana** | trends.fun | Trending token launches |
+| **Solana** | bags.fm | Fee sharing support |
+| **BSC** | flap.sh | Tax token support (1%/3%) |
+| **BSC** | four.meme | BSC Meme launchpad |
 
-## 📁 项目结构
+## 📁 Project Structure
 
 ```
 wagmi/
-├── content-engine/     # Go 后端服务 (API + 业务逻辑)
-├── launch-service/     # Node.js 发射服务 (链上交互)
-├── frontend/           # Next.js 前端应用
-├── docs/               # 设计文档
-├── DEPLOY.md           # 部署说明
+├── content-engine/     # Go backend service (API + business logic)
+├── launch-service/     # Node.js launch service (on-chain interactions)
+├── frontend/           # Next.js frontend application
+├── docs/               # Design documents
+├── DEPLOY.md           # Deployment guide
 └── README.md
 ```
 
-## 🛠️ 技术栈
+## 🛠️ Tech Stack
 
-### 后端服务 (content-engine)
-| 组件 | 技术 |
-|------|------|
-| 语言 | Go 1.21+ |
-| 框架 | Gin |
+### Backend Service (content-engine)
+| Component | Technology |
+|-----------|------------|
+| Language | Go 1.21+ |
+| Framework | Gin |
 | ORM | GORM |
-| 数据库 | PostgreSQL |
-| 认证 | JWT + 钱包签名 |
-| 调度 | 内置 Scheduler |
+| Database | PostgreSQL |
+| Auth | JWT + Wallet Signature |
+| Scheduler | Built-in Scheduler |
 
-### 发射服务 (launch-service)
-| 组件 | 技术 |
-|------|------|
-| 语言 | TypeScript |
-| 运行时 | Node.js 20+ |
-| 框架 | Express |
+### Launch Service (launch-service)
+| Component | Technology |
+|-----------|------------|
+| Language | TypeScript |
+| Runtime | Node.js 20+ |
+| Framework | Express |
 | Solana | @solana/web3.js, @coral-xyz/anchor |
 | BSC | ethers.js v6 |
-| 安全 | HMAC 签名验证, IP 白名单 |
+| Security | HMAC signature, IP whitelist |
 
-### 前端应用 (frontend)
-| 组件 | 技术 |
-|------|------|
-| 框架 | Next.js 15 (App Router) |
-| 语言 | TypeScript |
+### Frontend Application (frontend)
+| Component | Technology |
+|-----------|------------|
+| Framework | Next.js 15 (App Router) |
+| Language | TypeScript |
 | UI | React 19, Tailwind CSS |
-| 钱包 | Phantom, Solflare, MetaMask, OKX |
-| 状态 | React Hooks |
+| Wallets | Phantom, Solflare, MetaMask, OKX |
+| State | React Hooks |
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 环境要求
+### Prerequisites
 - Go 1.21+
 - Node.js 20+
 - PostgreSQL 14+
-- npm 或 yarn
+- npm or yarn
 
-### 1. 克隆仓库
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/wagmiac/wagmi.git
 cd wagmi
 ```
 
-### 2. 启动后端 (content-engine)
+### 2. Start Backend (content-engine)
 
 ```bash
 cd content-engine
 cp .env.example .env
-# 编辑 .env 配置数据库和密钥
+# Edit .env to configure database and keys
 go run cmd/server/main.go
 ```
 
-### 3. 启动发射服务 (launch-service)
+### 3. Start Launch Service (launch-service)
 
 ```bash
 cd launch-service
 cp .env.example .env
-# 编辑 .env 配置 RPC 和密钥
+# Edit .env to configure RPC and keys
 npm install
 npm run build
 npm start
 ```
 
-### 4. 启动前端 (frontend)
+### 4. Start Frontend (frontend)
 
 ```bash
 cd frontend
 cp .env.example .env.local
-# 编辑 .env.local 配置 API 地址
+# Edit .env.local to configure API URL
 npm install
 npm run dev
 ```
 
-访问 http://localhost:3000 查看应用
+Visit http://localhost:3000 to view the application
 
-## ⚙️ 环境变量配置
+## ⚙️ Environment Variables
 
 ### content-engine/.env
 ```env
-# 服务配置
+# Service config
 PORT=8080
 
-# 数据库
+# Database
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=your_password
 DB_NAME=wagmi
 
-# 安全
+# Security
 JWT_SECRET=your_jwt_secret
 WALLET_ENCRYPTION_KEY=your_32_byte_hex_key
 
-# 发射服务
+# Launch service
 LAUNCH_SERVICE_URL=http://localhost:3001
 LAUNCH_SERVICE_SECRET=your_hmac_secret
 
-# 平台钱包
+# Platform wallets
 PLATFORM_WALLET_SOL=your_solana_wallet
 PLATFORM_WALLET_BSC=your_bsc_wallet
 ```
 
 ### launch-service/.env
 ```env
-# 服务端口
+# Service port
 PORT=3001
 
-# RPC 节点
+# RPC nodes
 SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 BSC_RPC_URL=https://bsc-dataseed.binance.org
 
-# 代理 (可选)
+# Proxy (optional)
 HTTP_PROXY=
 
-# 安全
+# Security
 API_SECRET=your_hmac_secret
 IP_WHITELIST=127.0.0.1,::1
 
-# 交易配置
+# Transaction config
 SLIPPAGE_BPS=100
 PRIORITY_FEE_UNIT_PRICE=250000
 ```
@@ -180,61 +180,61 @@ NEXT_PUBLIC_API_URL=http://localhost:8080/api
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 ```
 
-## 📡 API 概览
+## 📡 API Overview
 
-### IMO 项目接口
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/imo/projects` | 项目列表 |
-| GET | `/api/imo/projects/ticker/:ticker` | 获取项目详情 |
-| POST | `/api/imo/projects` | 发掘新项目 |
-| POST | `/api/imo/projects/:id/bids` | 竞拍出价 |
-| GET | `/api/imo/projects/:id/timeline` | 项目时间线 |
+### IMO Project Endpoints
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/imo/projects` | List projects |
+| GET | `/api/imo/projects/ticker/:ticker` | Get project details |
+| POST | `/api/imo/projects` | Submit new project |
+| POST | `/api/imo/projects/:id/bids` | Place bid |
+| GET | `/api/imo/projects/:id/timeline` | Project timeline |
 
-### 发射接口
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/imo/admin/projects/:id/launch-with-payment` | 发射代币 |
-| GET | `/api/imo/admin/launch-orders` | 发射订单列表 |
+### Launch Endpoints
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/imo/admin/projects/:id/launch-with-payment` | Launch token |
+| GET | `/api/imo/admin/launch-orders` | List launch orders |
 
-### 钱包认证
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/imo/wallet/nonce` | 获取签名 nonce |
-| POST | `/api/imo/wallet/verify` | 验证钱包签名 |
+### Wallet Authentication
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/imo/wallet/nonce` | Get signing nonce |
+| POST | `/api/imo/wallet/verify` | Verify wallet signature |
 
-### 发射服务 (launch-service)
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/health` | 健康检查 |
-| POST | `/api/create` | 创建代币 |
-| POST | `/api/buy` | 买入代币 |
-| POST | `/api/sell` | 卖出代币 |
-| POST | `/api/token-balance` | 查询代币余额 |
-| POST | `/api/transfer-token` | 转账代币 |
+### Launch Service (launch-service)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| POST | `/api/create` | Create token |
+| POST | `/api/buy` | Buy token |
+| POST | `/api/sell` | Sell token |
+| POST | `/api/token-balance` | Query token balance |
+| POST | `/api/transfer-token` | Transfer token |
 
-## 🔐 安全机制
+## 🔐 Security
 
-1. **HMAC 签名验证** - launch-service 接口需要 HMAC-SHA256 签名
-2. **IP 白名单** - 仅允许指定 IP 访问发射服务
-3. **钱包签名认证** - 用户通过钱包签名登录
-4. **私钥加密存储** - 使用 AES-GCM 加密存储私钥
+1. **HMAC Signature Verification** - Launch-service APIs require HMAC-SHA256 signatures
+2. **IP Whitelist** - Only whitelisted IPs can access launch service
+3. **Wallet Signature Auth** - Users authenticate via wallet signatures
+4. **Encrypted Private Keys** - Private keys stored with AES-GCM encryption
 
-## 📦 部署
+## 📦 Deployment
 
-详见 [DEPLOY.md](./DEPLOY.md)
+See [DEPLOY.md](./DEPLOY.md) for details
 
-### 生产环境检查清单
-- [ ] 配置生产数据库
-- [ ] 配置正式 RPC 节点
-- [ ] 设置强密码和密钥
-- [ ] 配置 HTTPS
-- [ ] 配置 IP 白名单
-- [ ] 设置日志和监控
+### Production Checklist
+- [ ] Configure production database
+- [ ] Configure production RPC nodes
+- [ ] Set strong passwords and keys
+- [ ] Configure HTTPS
+- [ ] Configure IP whitelist
+- [ ] Set up logging and monitoring
 
-## 🤝 贡献
+## 🤝 Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Issues and Pull Requests are welcome!
 
 ## 📄 License
 
