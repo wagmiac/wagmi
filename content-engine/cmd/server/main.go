@@ -414,14 +414,16 @@ func main() {
 				imoAdmin.POST("/projects/:id/evaluate", imoEvaluationHandler.AdminTriggerEvaluation) // 管理员触发评估
 
 				// 发射相关
-				imoAdmin.GET("/launching", launchHandler.ListLaunchingProjects)                 // 待发射项目
-				imoAdmin.POST("/projects/:id/generate-wallet", launchHandler.GenerateDevWallet) // 生成Dev钱包
-				imoAdmin.GET("/projects/:id/wallet", launchHandler.GetDevWallet)                // 获取Dev钱包
-				imoAdmin.POST("/projects/:id/wallet/export", launchHandler.ExportDevWalletKey)  // 导出Dev钱包私钥
-				imoAdmin.POST("/projects/:id/launch", launchHandler.Launch)                     // 执行发射（旧流程）
-				imoAdmin.GET("/projects/:id/launch-status", launchHandler.GetLaunchStatus)      // 发射状态
-				imoAdmin.POST("/projects/:id/distribute", launchHandler.DistributeRevenue)      // 分发收益
-				imoAdmin.GET("/projects/:id/revenues", launchHandler.GetRevenueRecords)         // 分成记录
+				imoAdmin.GET("/launching", launchHandler.ListLaunchingProjects)                          // 待发射项目
+				imoAdmin.POST("/projects/:id/generate-wallet", launchHandler.GenerateDevWallet)          // 生成Dev钱包
+				imoAdmin.GET("/projects/:id/wallet", launchHandler.GetDevWallet)                         // 获取Dev钱包
+				imoAdmin.POST("/projects/:id/wallet/export", launchHandler.ExportDevWalletKey)           // 导出Dev钱包私钥
+				imoAdmin.POST("/projects/:id/wallet/fix-bsc-address", launchHandler.FixBSCWalletAddress) // 修复BSC钱包地址
+				imoAdmin.POST("/fix-all-bsc-addresses", launchHandler.FixAllBSCWalletAddresses)          // 批量修复所有BSC钱包地址
+				imoAdmin.POST("/projects/:id/launch", launchHandler.Launch)                              // 执行发射（旧流程）
+				imoAdmin.GET("/projects/:id/launch-status", launchHandler.GetLaunchStatus)               // 发射状态
+				imoAdmin.POST("/projects/:id/distribute", launchHandler.DistributeRevenue)               // 分发收益
+				imoAdmin.GET("/projects/:id/revenues", launchHandler.GetRevenueRecords)                  // 分成记录
 
 				// 新发射流程
 				imoAdmin.POST("/projects/:id/launch-order", launchHandler.CreateLaunchOrder)        // 创建发射订单

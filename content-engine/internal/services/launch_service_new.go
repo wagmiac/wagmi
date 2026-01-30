@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -181,35 +182,49 @@ func (s *LaunchService) executeSolanaLaunch(order *models.LaunchOrder, project *
 
 	log.Printf("Launch successful! Token address: %s", launchResult.TokenAddress)
 
-	// 查询 Dev 钱包中的代币余额
+	// 查询 Dev 钱包中的代币余额（带重试，因为交易刚确认余额可能还未更新）
 	var tokensReceived float64 = 0
-	balanceResp, err := s.GetTokenBalance(order.Chain, launchResult.TokenAddress, order.PaymentWalletAddress)
-	if err != nil {
-		log.Printf("Warning: Failed to get token balance: %v", err)
-	} else if balanceResp.Success && balanceResp.Balance != "" {
-		// 将原始余额转换为可读数量
-		balance, _ := strconv.ParseFloat(balanceResp.Balance, 64)
-		decimals := balanceResp.Decimals
-		if decimals == 0 {
-			decimals = 6 // 默认 6 位精度
+	var balanceResp *TokenBalanceResponse
+	for retry := 0; retry < 5; retry++ {
+		if retry > 0 {
+			log.Printf("Waiting for token balance to be available... (retry %d/5)", retry)
+			time.Sleep(3 * time.Second)
 		}
-		tokensReceived = balance / float64(pow10(decimals))
-		log.Printf("Dev wallet token balance: %s (%.2f tokens)", balanceResp.Balance, tokensReceived)
+		balanceResp, err = s.GetTokenBalance(order.Chain, launchResult.TokenAddress, order.PaymentWalletAddress)
+		if err != nil {
+			log.Printf("Warning: Failed to get token balance (retry %d): %v", retry, err)
+			continue
+		}
+		if balanceResp.Success && balanceResp.Balance != "" && balanceResp.Balance != "0" {
+			// 将原始余额转换为可读数量
+			balance, _ := strconv.ParseFloat(balanceResp.Balance, 64)
+			decimals := balanceResp.Decimals
+			if decimals == 0 {
+				decimals = 6 // 默认 6 位精度
+			}
+			tokensReceived = balance / float64(pow10(decimals))
+			log.Printf("Dev wallet token balance: %s (%.2f tokens)", balanceResp.Balance, tokensReceived)
+			break
+		}
+		log.Printf("Token balance is empty or zero, will retry...")
 	}
 
 	// 将代币转给用户
 	tokenTransferTx := ""
 	if balanceResp != nil && balanceResp.Success && balanceResp.Balance != "" && balanceResp.Balance != "0" {
-		log.Printf("Transferring tokens to user: %s", order.UserWallet)
+		log.Printf("Transferring tokens from dev wallet to user: %s", order.UserWallet)
+		log.Printf("Token address: %s, Amount: %s", launchResult.TokenAddress, balanceResp.Balance)
 		transferResp, err := s.TransferTokenToUser(order.Chain, launchResult.TokenAddress, privateKey, order.UserWallet, balanceResp.Balance)
 		if err != nil {
 			log.Printf("Warning: Failed to transfer tokens to user: %v", err)
 		} else if transferResp.Success {
 			tokenTransferTx = transferResp.TxHash
-			log.Printf("Tokens transferred to user! TxHash: %s", tokenTransferTx)
+			log.Printf("Tokens transferred to user successfully! TxHash: %s", tokenTransferTx)
 		} else {
 			log.Printf("Warning: Token transfer failed: %s", transferResp.Error)
 		}
+	} else {
+		log.Printf("Warning: No tokens to transfer (balance is empty or zero)")
 	}
 
 	return &LaunchOrderResult{
@@ -237,34 +252,48 @@ func (s *LaunchService) executeBSCLaunch(order *models.LaunchOrder, project *mod
 
 	log.Printf("Launch successful! Token address: %s", launchResult.TokenAddress)
 
-	// 查询 Dev 钱包中的代币余额
+	// 查询 Dev 钱包中的代币余额（带重试，因为交易刚确认余额可能还未更新）
 	var tokensReceived float64 = 0
-	balanceResp, err := s.GetTokenBalance(order.Chain, launchResult.TokenAddress, order.PaymentWalletAddress)
-	if err != nil {
-		log.Printf("Warning: Failed to get token balance: %v", err)
-	} else if balanceResp.Success && balanceResp.Balance != "" {
-		balance, _ := strconv.ParseFloat(balanceResp.Balance, 64)
-		decimals := balanceResp.Decimals
-		if decimals == 0 {
-			decimals = 18 // BSC 默认 18 位精度
+	var balanceResp *TokenBalanceResponse
+	for retry := 0; retry < 5; retry++ {
+		if retry > 0 {
+			log.Printf("Waiting for token balance to be available... (retry %d/5)", retry)
+			time.Sleep(3 * time.Second)
 		}
-		tokensReceived = balance / float64(pow10(decimals))
-		log.Printf("Dev wallet token balance: %s (%.2f tokens)", balanceResp.Balance, tokensReceived)
+		balanceResp, err = s.GetTokenBalance(order.Chain, launchResult.TokenAddress, order.PaymentWalletAddress)
+		if err != nil {
+			log.Printf("Warning: Failed to get token balance (retry %d): %v", retry, err)
+			continue
+		}
+		if balanceResp.Success && balanceResp.Balance != "" && balanceResp.Balance != "0" {
+			balance, _ := strconv.ParseFloat(balanceResp.Balance, 64)
+			decimals := balanceResp.Decimals
+			if decimals == 0 {
+				decimals = 18 // BSC 默认 18 位精度
+			}
+			tokensReceived = balance / float64(pow10(decimals))
+			log.Printf("Dev wallet token balance: %s (%.2f tokens)", balanceResp.Balance, tokensReceived)
+			break
+		}
+		log.Printf("Token balance is empty or zero, will retry...")
 	}
 
 	// 将代币转给用户
 	tokenTransferTx := ""
 	if balanceResp != nil && balanceResp.Success && balanceResp.Balance != "" && balanceResp.Balance != "0" {
-		log.Printf("Transferring tokens to user: %s", order.UserWallet)
+		log.Printf("Transferring tokens from dev wallet to user: %s", order.UserWallet)
+		log.Printf("Token address: %s, Amount: %s", launchResult.TokenAddress, balanceResp.Balance)
 		transferResp, err := s.TransferTokenToUser(order.Chain, launchResult.TokenAddress, privateKey, order.UserWallet, balanceResp.Balance)
 		if err != nil {
 			log.Printf("Warning: Failed to transfer tokens to user: %v", err)
 		} else if transferResp.Success {
 			tokenTransferTx = transferResp.TxHash
-			log.Printf("Tokens transferred to user! TxHash: %s", tokenTransferTx)
+			log.Printf("Tokens transferred to user successfully! TxHash: %s", tokenTransferTx)
 		} else {
 			log.Printf("Warning: Token transfer failed: %s", transferResp.Error)
 		}
+	} else {
+		log.Printf("Warning: No tokens to transfer (balance is empty or zero)")
 	}
 
 	return &LaunchOrderResult{
@@ -287,10 +316,10 @@ func pow10(n int) int64 {
 // callLaunchServiceForOrder 为订单调用 launch-service 微服务
 func (s *LaunchService) callLaunchServiceForOrder(order *models.LaunchOrder, project *models.Project, privateKey string) (*LaunchResult, error) {
 	// 计算初始买入金额（支付金额 - Gas 费用 - 优先费）
-	// Gas 费用预估：Solana 约 0.005 SOL，BSC 约 0.002 BNB
-	gasFeeReserve := 0.01 // 预留 0.01 SOL/BNB 给 Gas 和优先费
+	// Gas 费用预估：创建代币需要约 0.02 SOL / 0.015 BNB，预留足够余量
+	gasFeeReserve := 0.05 // 预留 0.05 SOL 给创建代币 + 买入的 Gas 费用
 	if order.Chain == models.ChainBSC {
-		gasFeeReserve = 0.005 // BSC Gas 便宜一些
+		gasFeeReserve = 0.015 // BSC 预留 0.015 BNB
 	}
 
 	initialBuyAmount := order.FirstBuyAmount - gasFeeReserve
@@ -316,6 +345,14 @@ func (s *LaunchService) callLaunchServiceWithTax(launchpad string, project *mode
 	// 网站链接统一使用 wagmi ticker 页面
 	wagmiWebsite := fmt.Sprintf("https://wagmi.ac/%s", project.Ticker)
 
+	// 将 Logo 转换为完整 URL（如果是相对路径）
+	logoURL := project.Logo
+	if strings.HasPrefix(logoURL, "/") {
+		// 相对路径，加上域名
+		logoURL = "https://wagmi.ac" + logoURL
+	}
+	log.Printf("Logo URL for launch: %s (original: %s)", logoURL, project.Logo)
+
 	reqBody := LaunchServiceRequest{
 		Launchpad:         launchpad,
 		CreatorPrivateKey: privateKey,
@@ -325,7 +362,7 @@ func (s *LaunchService) callLaunchServiceWithTax(launchpad string, project *mode
 			"name":        project.Name,
 			"symbol":      project.Ticker,
 			"description": truncateDescription(project.Description, 200),
-			"image":       project.Logo,
+			"image":       logoURL,
 			"twitter":     project.Twitter,
 			"telegram":    project.Telegram,
 			"website":     wagmiWebsite,

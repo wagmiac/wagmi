@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Sidebar, useSidebar } from "@/components/imo";
 import { DISCOVER_FEE, REVENUE_SPLIT } from "@/types/imo";
 
@@ -27,7 +26,7 @@ const faqItems: FAQItem[] = [
   {
     id: "what-is-wagmi",
     question: "什么是 wagmi？",
-    answer: "wagmi 是一个 IMO (Initial Meme Offering) 平台，让社区可以为任何优秀项目发行 Meme 币。不需要项目方参与，社区就能为项目发币；项目方可以后续认领社区，获得持续分成。",
+    answer: "WAGMI 是一个社区驱动的 Web3 创意代币化平台，核心理念是让社区可以为任何有潜力的项目发行 Meme 代币。\n\n不需要项目方参与，社区就能为优质项目发币；项目方可以后续认领社区，获得持续分成。",
     category: "basic",
   },
   {
@@ -38,39 +37,51 @@ const faqItems: FAQItem[] = [
   },
   {
     id: "supported-chains",
-    question: "wagmi 支持哪些链？",
-    answer: "目前支持 Solana 和 BSC（币安智能链）。\n\n• Solana：pump.fun、trends.fun、bags.fm\n• BSC：flap.sh",
+    question: "wagmi 支持哪些链和发射台？",
+    answer: "目前支持 Solana 和 BSC（币安智能链）两条链。\n\n• Solana：pump.fun、bags.fm\n• BSC：flap.sh、four.meme\n\n不同发射台有不同特性，flap.sh 支持设置交易税率（1%-10%）。",
     category: "basic",
   },
   {
     id: "connect-wallet",
     question: "如何连接钱包？",
-    answer: "点击页面左下角的「连接钱包」按钮。\n\n• Solana：支持 Phantom、Solflare\n• BSC：支持 MetaMask",
+    answer: "点击页面左下角的「连接钱包」按钮。\n\n• Solana 链：支持 Phantom 钱包\n• BSC 链：支持 MetaMask 钱包\n\n发射时会根据选择的链自动提示连接对应钱包。",
     category: "basic",
   },
   // 发掘相关
   {
     id: "how-to-discover",
     question: "如何发掘项目？",
-    answer: `1. 连接钱包\n2. 点击「发掘项目」按钮\n3. 填写项目信息（名称、简介、Logo）\n4. 添加验证链接（Twitter、GitHub、官网等）\n5. 选择发射链和发射台\n6. 设定首单购买金额\n7. 支付 $${DISCOVER_FEE} 发掘费 + 首单金额\n8. 提交成功后成为该项目的「伯乐」`,
+    answer: `1. 连接钱包\n2. 点击首页的「发掘项目」按钮\n3. 填写项目信息（名称、Ticker、简介）\n4. 上传项目 Logo\n5. 添加项目链接（Twitter、GitHub、官网等）\n6. 支付 $${DISCOVER_FEE} USDT 发掘费\n7. 提交成功后成为该项目的「伯乐」\n\n发掘成功后，您可以在项目详情页选择发射台进行代币发射。`,
+    category: "discover",
+  },
+  {
+    id: "how-to-launch",
+    question: "如何发射代币？",
+    answer: "发掘项目后，在项目详情页的「代币信息」区域：\n\n1. 选择发射台（pump.fun、bags.fm、flap.sh、four.meme）\n2. 设定首单购买金额\n3. 如选择 flap.sh，可设置交易税率（1%、3%、5%、10%）\n4. 使用钱包支付首单金额\n5. 等待代币创建完成\n\n同一项目可以在多个发射台发射。",
     category: "discover",
   },
   {
     id: "discover-fee",
     question: `为什么要支付 $${DISCOVER_FEE} 发掘费？`,
-    answer: `$${DISCOVER_FEE} 发掘费用于：\n\n1. 防止垃圾项目刷屏\n2. 确保发掘者认真筛选项目\n3. 激励发掘真正有价值的项目\n\n作为回报，发掘者（伯乐）将获得该项目 ${REVENUE_SPLIT.scout * 100}% 的持续分成。`,
+    answer: `$${DISCOVER_FEE} USDT 发掘费用于：\n\n1. 防止垃圾项目刷屏\n2. 确保发掘者认真筛选项目\n3. 激励发掘真正有价值的项目\n\n作为回报，发掘者（伯乐）将获得该项目 ${REVENUE_SPLIT.scout * 100}% 的持续分成。`,
     category: "discover",
   },
   {
     id: "what-is-scout",
     question: "什么是伯乐（Scout）？",
-    answer: `伯乐是发掘并发射项目的人。支付 $${DISCOVER_FEE} + 首单金额成功发掘项目后，您就成为该项目的伯乐。\n\n伯乐权益：\n• 代币命名权（设定 Ticker）\n• 首批代币（以发射价买入）\n• ${REVENUE_SPLIT.scout * 100}% 持续分成`,
+    answer: `伯乐是发掘项目的人。支付 $${DISCOVER_FEE} 成功发掘项目后，您就成为该项目的伯乐。\n\n伯乐权益：\n• 代币命名权（设定 Ticker）\n• 首批代币（以发射价买入）\n• ${REVENUE_SPLIT.scout * 100}% 持续分成\n• 可在多个发射台发射代币`,
     category: "discover",
   },
   {
     id: "first-buy",
     question: "什么是首单购买？",
-    answer: "首单购买是伯乐在发掘项目时设定的首次购买金额。这笔资金会在代币发射时以发射价买入代币。\n\n这确保了：\n• 伯乐对项目有信心\n• 伯乐获得首批代币\n• 项目有初始流动性",
+    answer: "首单购买是在发射代币时设定的首次购买金额。\n\n• Solana 链最低 0.1 SOL\n• BSC 链最低 0.02 BNB\n\n这笔资金会在代币创建时以发射价买入代币，确保伯乐获得首批代币。",
+    category: "discover",
+  },
+  {
+    id: "flap-tax",
+    question: "什么是 flap.sh 税率功能？",
+    answer: "flap.sh 发射台支持设置交易税率（1%、3%、5%、10%）。\n\n设置税率后，代币的每笔交易都会收取相应比例的税，税收会自动转入项目的 Dev 钱包，可用于项目持续发展。\n\n如不需要税率，选择「无税」即可。",
     category: "discover",
   },
   // 认领相关
@@ -89,26 +100,26 @@ const faqItems: FAQItem[] = [
   {
     id: "verification-icons",
     question: "验证图标有什么用？",
-    answer: "验证图标表示项目的官方链接已验证：\n\n• Twitter 已验证\n• GitHub 已验证\n• 官网已验证\n• Product Hunt 已验证\n\n验证图标越多，首次释放比例越高（最高 25%）。",
+    answer: "验证图标表示项目的官方链接已验证：\n\n• 🐦 Twitter 已验证\n• 🐙 GitHub 已验证\n• 🌐 官网已验证\n• 🏆 官方认领\n\n验证图标越多，项目可信度越高，有助于吸引更多关注。",
     category: "claim",
   },
   // 收益相关
   {
     id: "revenue-distribution",
-    question: "资金如何分配？",
-    answer: `代币交易产生的创作者分成按以下比例分配：\n\n• 创作者：${REVENUE_SPLIT.creator * 100}%（认领后）\n• 伯乐：${REVENUE_SPLIT.scout * 100}%\n• 平台：${REVENUE_SPLIT.platform * 100}%\n\n如果创作者未认领，其 ${REVENUE_SPLIT.creator * 100}% 暂存于 Dev 钱包。`,
+    question: "收益如何分配？",
+    answer: `代币交易产生的创作者分成按以下比例分配：\n\n• 创作者：${REVENUE_SPLIT.creator * 100}%（认领后）\n• 伯乐：${REVENUE_SPLIT.scout * 100}%\n• 平台：${REVENUE_SPLIT.platform * 100}%\n\n如果创作者未认领，其 ${REVENUE_SPLIT.creator * 100}% 暂存于 Dev 钱包，待认领后发放。`,
     category: "revenue",
   },
   {
     id: "scout-revenue",
     question: "伯乐如何获得收益？",
-    answer: `项目发射后，每笔代币交易产生的手续费中，${REVENUE_SPLIT.scout * 100}% 将分配给伯乐。\n\n收益会定期发送到您的钱包，可在「我的」页面查看收益明细。`,
+    answer: `项目发射后，代币交易产生的创作者分成中，${REVENUE_SPLIT.scout * 100}% 将分配给伯乐。\n\n收益会定期发送到您的钱包，可在「我的」页面查看收益明细。`,
     category: "revenue",
   },
   {
     id: "dev-wallet",
     question: "什么是 Dev 钱包？",
-    answer: "Dev 钱包是每个项目的专属钱包，用于：\n\n1. 持有小额代币\n2. 接收发射台的创作者分成\n3. 向伯乐和创作者分配收益\n\n私钥由 wagmi 加密存储。",
+    answer: "Dev 钱包是每个项目在每个发射台的专属钱包，用于：\n\n1. 接收首单购买的代币\n2. 接收发射台的创作者分成\n3. 接收 flap.sh 税率收入\n4. 向伯乐和创作者分配收益\n\n私钥由 wagmi 加密存储，确保资金安全。",
     category: "revenue",
   },
 ];
@@ -179,47 +190,6 @@ export default function HelpPage() {
               <p className="text-2xl md:text-3xl font-bold text-[#00E5FF] mb-1">{REVENUE_SPLIT.creator * 100}%</p>
               <p className="text-xs md:text-sm text-gray-400">创作者分成</p>
             </div>
-          </div>
-
-          {/* Quick Links */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <Link 
-              href="/submit"
-              className="bg-gradient-to-br from-[#FF8C00]/20 to-[#FF8C00]/5 border border-[#FF8C00]/30 rounded-xl p-3 md:p-4 hover:border-[#FF8C00]/50 transition group"
-            >
-              <div className="text-xl md:text-2xl mb-1 md:mb-2">🔍</div>
-              <h3 className="font-bold text-white text-sm md:text-base group-hover:text-[#FF8C00] transition">发掘项目</h3>
-              <p className="text-xs text-gray-400 mt-1 hidden md:block">支付 $99 发掘优质项目</p>
-            </Link>
-            
-            <Link 
-              href="/"
-              className="bg-white/5 border border-white/10 rounded-xl p-3 md:p-4 hover:border-white/20 transition group"
-            >
-              <div className="text-xl md:text-2xl mb-1 md:mb-2">💰</div>
-              <h3 className="font-bold text-white text-sm md:text-base group-hover:text-[#FF8C00] transition">参与竞拍</h3>
-              <p className="text-xs text-gray-400 mt-1 hidden md:block">竞拍获得项目命名权</p>
-            </Link>
-            
-            <Link 
-              href="/claim"
-              className="bg-white/5 border border-white/10 rounded-xl p-3 md:p-4 hover:border-white/20 transition group"
-            >
-              <div className="text-xl md:text-2xl mb-1 md:mb-2">🏆</div>
-              <h3 className="font-bold text-white text-sm md:text-base group-hover:text-[#FF8C00] transition">创作者认领</h3>
-              <p className="text-xs text-gray-400 mt-1 hidden md:block">认领您的项目社区</p>
-            </Link>
-            
-            <a 
-              href="https://www.notion.so/wagmi-meme-IMO-2f39170d2f1080358c6beed82f634437"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-white/5 border border-white/10 rounded-xl p-3 md:p-4 hover:border-white/20 transition group"
-            >
-              <div className="text-xl md:text-2xl mb-1 md:mb-2">📄</div>
-              <h3 className="font-bold text-white text-sm md:text-base group-hover:text-[#FF8C00] transition">白皮书</h3>
-              <p className="text-xs text-gray-400 mt-1 hidden md:block">查看完整文档 →</p>
-            </a>
           </div>
 
           {/* Category Tabs */}
@@ -296,7 +266,7 @@ export default function HelpPage() {
             <p className="text-gray-400 text-sm mb-4">加入我们的社区，与团队和其他用户交流</p>
             <div className="flex flex-wrap gap-2 md:gap-3">
               <a
-                href="https://twitter.com/nicekate99"
+                href="https://x.com/wagmiac"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-3 md:px-4 py-2 bg-white/10 rounded-lg text-white text-sm hover:bg-white/20 transition"
@@ -307,7 +277,7 @@ export default function HelpPage() {
                 Twitter
               </a>
               <a
-                href="https://t.me/wagmi_imo"
+                href="https://t.me/wagmiac"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-3 md:px-4 py-2 bg-white/10 rounded-lg text-white text-sm hover:bg-white/20 transition"
@@ -318,13 +288,15 @@ export default function HelpPage() {
                 Telegram
               </a>
               <a
-                href="mailto:hello@wagmi.fun"
+                href="https://www.notion.so/wagmi-meme-IMO-2f39170d2f1080358c6beed82f634437"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-3 md:px-4 py-2 bg-white/10 rounded-lg text-white text-sm hover:bg-white/20 transition"
               >
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Email
+                白皮书
               </a>
             </div>
           </div>

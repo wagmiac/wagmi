@@ -6,6 +6,7 @@ import (
 	"content-engine/internal/models"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/rand"
@@ -20,8 +21,10 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"gorm.io/gorm"
 )
 
@@ -149,24 +152,34 @@ func (s *LaunchService) generateSolanaWallet() (*DevWalletInfo, error) {
 
 // generateEVMWallet 生成EVM钱包（BSC）
 func (s *LaunchService) generateEVMWallet() (*DevWalletInfo, error) {
-	// 生成32字节随机私钥
-	privateKeyBytes := make([]byte, 32)
-	if _, err := rand.Read(privateKeyBytes); err != nil {
-		return nil, err
+	// 使用 go-ethereum 生成 ECDSA 私钥
+	privateKey, err := crypto.GenerateKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate ECDSA key: %w", err)
 	}
 
-	// TODO: 实际实现需要使用 go-ethereum 库
-	// 这里简化处理，生产环境需要完整实现
+	// 获取私钥字节（32字节）
+	privateKeyBytes := crypto.FromECDSA(privateKey)
 	privateKeyHex := hex.EncodeToString(privateKeyBytes)
 
-	// 模拟地址生成（实际需要从私钥推导）
-	addressBytes := make([]byte, 20)
-	rand.Read(addressBytes)
-	address := "0x" + hex.EncodeToString(addressBytes)
+	// 从私钥推导公钥和地址
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, errors.New("failed to cast public key to ECDSA")
+	}
+
+	// 获取地址
+	address := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+
+	// 获取公钥字节
+	publicKeyBytes := crypto.FromECDSAPub(publicKeyECDSA)
+
+	log.Printf("Generated EVM wallet: address=%s", address)
 
 	return &DevWalletInfo{
 		Address:    address,
-		PublicKey:  "", // EVM 公钥需要从私钥推导
+		PublicKey:  hex.EncodeToString(publicKeyBytes),
 		PrivateKey: privateKeyHex,
 	}, nil
 }
@@ -267,6 +280,126 @@ func (s *LaunchService) ExportDevWalletKey(projectID string, launchpad string) (
 	}
 
 	return "", errors.New("wallet key not found for launchpad: " + launchpad)
+}
+
+// FixBSCWalletAddressResult 修复 BSC 钱包地址的结果
+type FixBSCWalletAddressResult struct {
+	ProjectID  string `json:"projectId"`
+	Ticker     string `json:"ticker"`
+	Launchpad  string `json:"launchpad"`
+	OldAddress string `json:"oldAddress"`
+	NewAddress string `json:"newAddress"`
+	Fixed      bool   `json:"fixed"`
+	Error      string `json:"error,omitempty"`
+}
+
+// FixBSCWalletAddress 修复单个项目的 BSC 钱包地址（从私钥推导正确地址）
+func (s *LaunchService) FixBSCWalletAddress(projectID string, launchpad string) (*FixBSCWalletAddressResult, error) {
+	var project models.Project
+	if err := s.db.First(&project, "id = ?", projectID).Error; err != nil {
+		return nil, err
+	}
+
+	result := &FixBSCWalletAddressResult{
+		ProjectID: projectID,
+		Ticker:    project.Ticker,
+		Launchpad: launchpad,
+	}
+
+	// 获取加密的私钥
+	var encryptedKey string
+	var oldAddress string
+
+	if project.LaunchpadKeys != nil {
+		if key, ok := project.LaunchpadKeys[launchpad].(string); ok && key != "" {
+			encryptedKey = key
+		}
+	}
+	if project.LaunchpadWallets != nil {
+		if addr, ok := project.LaunchpadWallets[launchpad].(string); ok && addr != "" {
+			oldAddress = addr
+		}
+	}
+
+	if encryptedKey == "" {
+		result.Error = "no encrypted key found for launchpad"
+		return result, nil
+	}
+
+	result.OldAddress = oldAddress
+
+	// 解密私钥
+	privateKeyHex, err := s.decryptPrivateKey(encryptedKey)
+	if err != nil {
+		result.Error = fmt.Sprintf("failed to decrypt private key: %v", err)
+		return result, nil
+	}
+
+	// 从私钥推导正确地址
+	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
+	if err != nil {
+		result.Error = fmt.Sprintf("failed to decode private key hex: %v", err)
+		return result, nil
+	}
+
+	privateKey, err := crypto.ToECDSA(privateKeyBytes)
+	if err != nil {
+		result.Error = fmt.Sprintf("failed to parse ECDSA key: %v", err)
+		return result, nil
+	}
+
+	correctAddress := crypto.PubkeyToAddress(privateKey.PublicKey).Hex()
+	result.NewAddress = correctAddress
+
+	// 检查是否需要修复
+	if strings.EqualFold(oldAddress, correctAddress) {
+		result.Fixed = false
+		result.Error = "address already correct"
+		return result, nil
+	}
+
+	// 更新数据库中的地址
+	if project.LaunchpadWallets == nil {
+		project.LaunchpadWallets = make(models.JSONMap)
+	}
+	project.LaunchpadWallets[launchpad] = correctAddress
+
+	if err := s.db.Model(&project).Update("launchpad_wallets", project.LaunchpadWallets).Error; err != nil {
+		result.Error = fmt.Sprintf("failed to update database: %v", err)
+		return result, nil
+	}
+
+	result.Fixed = true
+	log.Printf("Fixed BSC wallet address for project %s (%s): %s -> %s", project.Ticker, launchpad, oldAddress, correctAddress)
+
+	return result, nil
+}
+
+// FixAllBSCWalletAddresses 修复所有 BSC 钱包地址
+func (s *LaunchService) FixAllBSCWalletAddresses() ([]*FixBSCWalletAddressResult, error) {
+	var projects []models.Project
+	// 查找所有 BSC 链的项目
+	if err := s.db.Where("chain = ?", models.ChainBSC).Find(&projects).Error; err != nil {
+		return nil, err
+	}
+
+	var results []*FixBSCWalletAddressResult
+
+	for _, project := range projects {
+		// 检查每个发射台的钱包
+		if project.LaunchpadKeys != nil {
+			for launchpad := range project.LaunchpadKeys {
+				result, err := s.FixBSCWalletAddress(project.ID, launchpad)
+				if err != nil {
+					log.Printf("Error fixing wallet for project %s: %v", project.ID, err)
+					continue
+				}
+				results = append(results, result)
+			}
+		}
+	}
+
+	return results, nil
 }
 
 // LaunchRequest 发射请求
@@ -386,7 +519,7 @@ type LaunchServiceRequest struct {
 	Metadata          map[string]interface{} `json:"metadata"`
 	CreatorPrivateKey string                 `json:"creatorPrivateKey"`
 	InitialBuyAmount  float64                `json:"initialBuyAmount,omitempty"`
-	TaxRate           int                    `json:"taxRate,omitempty"` // flap.sh 税率（基点，0=无税，100=1%，300=3%）
+	TaxRate           int                    `json:"taxRate,omitempty"` // flap.sh 税率（基点，0=无税，100=1%，300=3%，500=5%，1000=10%）
 }
 
 // LaunchServiceResponse 发射服务响应
@@ -410,6 +543,14 @@ func (s *LaunchService) callLaunchService(project *models.Project, privateKey st
 	// 网站链接统一使用 wagmi ticker 页面
 	wagmiWebsite := fmt.Sprintf("https://wagmi.ac/%s", project.Ticker)
 
+	// 将 Logo 转换为完整 URL（如果是相对路径）
+	logoURL := project.Logo
+	if strings.HasPrefix(logoURL, "/") {
+		// 相对路径，加上域名
+		logoURL = "https://wagmi.ac" + logoURL
+	}
+	log.Printf("Logo URL for launch: %s (original: %s)", logoURL, project.Logo)
+
 	reqBody := LaunchServiceRequest{
 		Launchpad:         string(project.Launchpad),
 		CreatorPrivateKey: privateKey,
@@ -418,7 +559,7 @@ func (s *LaunchService) callLaunchService(project *models.Project, privateKey st
 			"name":        project.Name,
 			"symbol":      project.Ticker,
 			"description": truncateDescription(project.Description, 200),
-			"image":       project.Logo,
+			"image":       logoURL,
 			"twitter":     project.Twitter,
 			"telegram":    project.Telegram,
 			"website":     wagmiWebsite,
@@ -544,6 +685,10 @@ func sortedJSONMarshal(v interface{}) []byte {
 			"initialBuyAmount":  val.InitialBuyAmount,
 			"launchpad":         val.Launchpad,
 			"metadata":          val.Metadata,
+		}
+		// 只有非零税率才包含在签名中（与 JSON omitempty 行为一致）
+		if val.TaxRate > 0 {
+			m["taxRate"] = val.TaxRate
 		}
 		return sortedJSONMarshal(m)
 
@@ -684,7 +829,7 @@ type VerifyTransactionResponse struct {
 	Error        string  `json:"error,omitempty"`
 }
 
-// VerifyPaymentTransaction 验证支付交易
+// VerifyPaymentTransaction 验证支付交易（带重试机制等待确认）
 func (s *LaunchService) VerifyPaymentTransaction(chain models.Chain, txHash string, expectedTo string, expectedAmount float64) (*VerifyTransactionResponse, error) {
 	reqBody := VerifyTransactionRequest{
 		Chain:          string(chain),
@@ -698,17 +843,37 @@ func (s *LaunchService) VerifyPaymentTransaction(chain models.Chain, txHash stri
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	resp, err := s.callLaunchServiceAPI("/api/verify-transaction", jsonData)
-	if err != nil {
-		return nil, err
+	// 重试最多 10 次，每次间隔 2 秒，等待交易确认
+	maxRetries := 10
+	retryInterval := 2 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		resp, err := s.callLaunchServiceAPI("/api/verify-transaction", jsonData)
+		if err != nil {
+			return nil, err
+		}
+
+		var result VerifyTransactionResponse
+		if err := json.Unmarshal(resp, &result); err != nil {
+			return nil, fmt.Errorf("failed to parse response: %w", err)
+		}
+
+		// 如果交易已确认，返回结果
+		if result.Confirmed {
+			return &result, nil
+		}
+
+		// 如果是最后一次重试，返回未确认的结果
+		if i == maxRetries-1 {
+			return &result, nil
+		}
+
+		// 等待后重试
+		log.Printf("Transaction not confirmed yet, retrying in %v... (%d/%d)", retryInterval, i+1, maxRetries)
+		time.Sleep(retryInterval)
 	}
 
-	var result VerifyTransactionResponse
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &result, nil
+	return nil, fmt.Errorf("transaction verification timed out after %d retries", maxRetries)
 }
 
 // TokenBalanceRequest 代币余额请求
@@ -845,21 +1010,30 @@ func (s *LaunchService) callLaunchServiceAPI(endpoint string, jsonData []byte) (
 		launchServiceURL = "http://localhost:3001"
 	}
 
-	// 生成签名
+	// 生成签名（需要对 JSON 按 key 排序，与 launch-service 一致）
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 
-	// 对 JSON body 进行签名
+	// 先解析 JSON 为 map，再按 key 排序重新序列化
+	var bodyMap map[string]interface{}
+	if err := json.Unmarshal(jsonData, &bodyMap); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON for signing: %w", err)
+	}
+	sortedJSON := sortedJSONMarshal(bodyMap)
+
+	// 对排序后的 JSON body 进行签名
 	secret := s.cfg.LaunchServiceSecret
 	if secret == "" {
 		secret = "wagmi-launch-service-secret-2026"
 	}
-	payload := timestamp + "." + string(jsonData)
+	payload := timestamp + "." + string(sortedJSON)
 	h := hmac.New(sha256.New, []byte(secret))
 	h.Write([]byte(payload))
 	signature := hex.EncodeToString(h.Sum(nil))
 
-	// 创建请求
-	req, err := http.NewRequest("POST", launchServiceURL+endpoint, bytes.NewBuffer(jsonData))
+	log.Printf("[LaunchService] Calling %s, timestamp=%s, sortedBody=%s", endpoint, timestamp, string(sortedJSON))
+
+	// 创建请求 - 发送排序后的 JSON 以确保一致性
+	req, err := http.NewRequest("POST", launchServiceURL+endpoint, bytes.NewBuffer(sortedJSON))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

@@ -28,6 +28,7 @@ export function TokenList({ project }: TokenListProps) {
   const [launchingPad, setLaunchingPad] = useState<Launchpad | null>(null);
   const [showBuyInput, setShowBuyInput] = useState<Launchpad | null>(null);
   const [buyAmount, setBuyAmount] = useState<string>("");
+  const [taxRate, setTaxRate] = useState<number>(0); // flap.sh 税率（基点，100=1%）
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
@@ -82,6 +83,7 @@ export function TokenList({ project }: TokenListProps) {
     const chain = getChainForLaunchpad(launchpad);
     const chainConfig = CHAIN_CONFIG[chain];
     setBuyAmount(chainConfig.minFirstBuy.toString());
+    setTaxRate(0); // 重置税率
     setShowBuyInput(launchpad);
     setError(null);
   };
@@ -90,6 +92,7 @@ export function TokenList({ project }: TokenListProps) {
   const handleCancelLaunch = () => {
     setShowBuyInput(null);
     setBuyAmount("");
+    setTaxRate(0);
     setError(null);
   };
 
@@ -168,6 +171,8 @@ export function TokenList({ project }: TokenListProps) {
         firstBuyAmount: amount,
         userWallet: actualUserWallet,
         paymentTxHash: transferResult.txHash!,
+        // flap.sh 专属：税率
+        taxRate: launchpad === 'flap.sh' ? taxRate : undefined,
       });
 
       if (res.success) {
@@ -376,6 +381,34 @@ export function TokenList({ project }: TokenListProps) {
               />
               <span className="text-xs text-gray-400">{chainConfig.currency}</span>
             </div>
+            {/* flap.sh 专属：税率选择 */}
+            {launchpad === 'flap.sh' && (
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500">交易税率</p>
+                <div className="flex gap-1">
+                  {[
+                    { value: 0, label: "无税" },
+                    { value: 100, label: "1%" },
+                    { value: 300, label: "3%" },
+                    { value: 500, label: "5%" },
+                    { value: 1000, label: "10%" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setTaxRate(opt.value)}
+                      className={`flex-1 px-1 py-1.5 text-xs rounded transition ${
+                        taxRate === opt.value
+                          ? "bg-[#FF8C00]/20 text-[#FF8C00] border border-[#FF8C00]/50"
+                          : "bg-white/5 text-gray-400 border border-white/10 hover:border-white/30"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {error && showBuyInput === launchpad && (
               <p className="text-xs text-red-400">{error}</p>
             )}

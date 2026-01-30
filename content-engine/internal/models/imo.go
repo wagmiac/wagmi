@@ -269,7 +269,7 @@ type LaunchOrder struct {
 	// 发射配置
 	Chain     Chain     `json:"chain" gorm:"type:varchar(20);not null"`
 	Launchpad Launchpad `json:"launchpad" gorm:"type:varchar(50);not null"`
-	TaxRate   int       `json:"tax_rate" gorm:"type:int;default:0"` // flap.sh 税率（基点，0=无税，100=1%，300=3%）
+	TaxRate   int       `json:"tax_rate" gorm:"type:int;default:0"` // flap.sh 税率（基点，0=无税，100=1%，300=3%，500=5%，1000=10%）
 
 	// 首单购买金额
 	FirstBuyAmount float64 `json:"first_buy_amount" gorm:"type:decimal(20,8);not null"` // 首单购买金额

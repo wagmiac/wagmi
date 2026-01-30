@@ -10,6 +10,7 @@ import {
   Transaction,
   Commitment,
   Finality,
+  TransactionInstruction,
 } from '@solana/web3.js';
 import { 
   getAssociatedTokenAddress, 
@@ -24,6 +25,9 @@ import {
   DEFAULT_COMMITMENT, 
   DEFAULT_FINALITY,
   PUMP_FUN_IPFS_API,
+  PUMP_PROGRAM_ID,
+  PUMP_FEE_PROGRAM_ID,
+  MPL_TOKEN_METADATA_PROGRAM_ID,
 } from './consts.js';
 import { 
   CreateTokenMetadata, 
@@ -46,6 +50,8 @@ import {
 } from './pda.js';
 import { calculateWithSlippageBuy, calculateWithSlippageSell } from './slippage.js';
 import { sendTx } from './tx.js';
+import { SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 // Pump.fun IDL (Anchor 0.30.x 格式)
 const PUMP_IDL = {
@@ -80,7 +86,7 @@ const PUMP_IDL = {
         { name: 'name', type: 'string' },
         { name: 'symbol', type: 'string' },
         { name: 'uri', type: 'string' },
-        { name: 'creator', type: 'pubkey' },
+        { name: 'creator', type: { defined: 'Pubkey' } },
       ],
     },
     {
@@ -101,6 +107,7 @@ const PUMP_IDL = {
         { name: 'globalVolumeAccumulator', writable: true, signer: false },
         { name: 'userVolumeAccumulator', writable: true, signer: false },
         { name: 'feeConfig', writable: false, signer: false },
+        { name: 'feeProgram', writable: false, signer: false },
       ],
       args: [
         { name: 'amount', type: 'u64' },
@@ -131,7 +138,17 @@ const PUMP_IDL = {
     },
   ],
   accounts: [],
-  types: [],
+  types: [
+    {
+      name: 'Pubkey',
+      type: {
+        kind: 'struct',
+        fields: [
+          { name: 'data', type: { array: ['u8', 32] } },
+        ],
+      },
+    },
+  ],
   events: [],
   errors: [],
 } as const;
@@ -148,7 +165,8 @@ export class PumpFunSDK {
   private creatorFeeBps = 100n; // 1%
 
   constructor(provider: AnchorProviderType) {
-    this.program = new Program(PUMP_IDL as any, provider);
+    // Anchor 0.29.0: new Program(idl, programId, provider)
+    this.program = new Program(PUMP_IDL as any, PUMP_PROGRAM_ID, provider);
     this.connection = provider.connection;
   }
 
@@ -313,20 +331,40 @@ export class PumpFunSDK {
     const global = getGlobalAccountPda();
     const metadata = getMetadataPDA(mint.publicKey);
     const eventAuthority = getEventAuthorityPda();
+    const mplTokenMetadata = new PublicKey(MPL_TOKEN_METADATA_PROGRAM_ID);
 
-    const ix = await this.program.methods
-      .create(name, symbol, uri, creator)
-      .accounts({
-        mint: mint.publicKey,
-        mintAuthority,
-        bondingCurve,
-        associatedBondingCurve: associatedBonding,
-        global,
-        metadata,
-        user: creator,
-        eventAuthority,
-      })
-      .instruction();
+    // 手动编码指令数据，绕过 Anchor 的签名者验证
+    const coder = this.program.coder;
+    const ixData = coder.instruction.encode('create', {
+      name,
+      symbol,
+      uri,
+      creator: { data: Array.from(creator.toBytes()) },
+    });
+
+    // 按 IDL 顺序构建账户
+    const keys = [
+      { pubkey: mint.publicKey, isSigner: true, isWritable: true },
+      { pubkey: mintAuthority, isSigner: false, isWritable: false },
+      { pubkey: bondingCurve, isSigner: false, isWritable: true },
+      { pubkey: associatedBonding, isSigner: false, isWritable: true },
+      { pubkey: global, isSigner: false, isWritable: false },
+      { pubkey: mplTokenMetadata, isSigner: false, isWritable: false },
+      { pubkey: metadata, isSigner: false, isWritable: true },
+      { pubkey: creator, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: eventAuthority, isSigner: false, isWritable: false },
+      { pubkey: PUMP_PROGRAM_ID, isSigner: false, isWritable: false },
+    ];
+
+    const ix = new TransactionInstruction({
+      programId: PUMP_PROGRAM_ID,
+      keys,
+      data: ixData,
+    });
 
     return new Transaction().add(ix);
   }
@@ -370,23 +408,38 @@ export class PumpFunSDK {
 
     const eventAuthority = getEventAuthorityPda();
 
-    const ix = await this.program.methods
-      .buy(new BN(amount.toString()), new BN(maxSolCost.toString()))
-      .accounts({
-        global: globalAccountPDA,
-        feeRecipient: globalAccount.feeRecipient,
-        mint,
-        bondingCurve,
-        associatedBondingCurve: associatedBonding,
-        associatedUser,
-        user: buyer,
-        creatorVault,
-        eventAuthority,
-        globalVolumeAccumulator: getGlobalVolumeAccumulatorPda(),
-        userVolumeAccumulator: getUserVolumeAccumulatorPda(buyer),
-        feeConfig: getPumpFeeConfigPda(),
-      })
-      .instruction();
+    // 手动编码 buy 指令数据
+    const coder = this.program.coder;
+    const ixData = coder.instruction.encode('buy', {
+      amount: new BN(amount.toString()),
+      maxSolCost: new BN(maxSolCost.toString()),
+    });
+
+    // 按 IDL 顺序构建账户
+    const keys = [
+      { pubkey: globalAccountPDA, isSigner: false, isWritable: false },
+      { pubkey: globalAccount.feeRecipient, isSigner: false, isWritable: true },
+      { pubkey: mint, isSigner: false, isWritable: false },
+      { pubkey: bondingCurve, isSigner: false, isWritable: true },
+      { pubkey: associatedBonding, isSigner: false, isWritable: true },
+      { pubkey: associatedUser, isSigner: false, isWritable: true },
+      { pubkey: buyer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: creatorVault, isSigner: false, isWritable: true },
+      { pubkey: eventAuthority, isSigner: false, isWritable: false },
+      { pubkey: PUMP_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: getGlobalVolumeAccumulatorPda(), isSigner: false, isWritable: true },
+      { pubkey: getUserVolumeAccumulatorPda(buyer), isSigner: false, isWritable: true },
+      { pubkey: getPumpFeeConfigPda(), isSigner: false, isWritable: false },
+      { pubkey: PUMP_FEE_PROGRAM_ID, isSigner: false, isWritable: false },
+    ];
+
+    const ix = new TransactionInstruction({
+      programId: PUMP_PROGRAM_ID,
+      keys,
+      data: ixData,
+    });
 
     tx.add(ix);
   }
@@ -459,7 +512,7 @@ export class PumpFunSDK {
   ): Promise<TransactionResult> {
     const tokenMetadata = await this.createTokenMetadata(metadata);
 
-    const createIx = await this.getCreateInstructions(
+    const createTx = await this.getCreateInstructions(
       creator.publicKey,
       metadata.name,
       metadata.symbol,
@@ -467,7 +520,8 @@ export class PumpFunSDK {
       mint
     );
 
-    const transaction = new Transaction().add(createIx);
+    // 使用返回的 Transaction
+    const transaction = createTx;
 
     if (buyAmountSol > 0n) {
       const globalAccount = await this.getGlobalAccount(commitment);

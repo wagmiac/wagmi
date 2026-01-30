@@ -296,3 +296,73 @@ func (h *LaunchHandler) ExportDevWalletKey(c *gin.Context) {
 		},
 	})
 }
+
+// FixBSCWalletAddress 修复单个项目的 BSC 钱包地址（仅管理员）
+// @Summary 修复 BSC 钱包地址（从私钥推导正确地址）
+// @Tags Launch
+// @Param id path string true "Project ID"
+// @Param body body object true "Request body"
+// @Success 200 {object} object
+// @Router /api/imo/admin/projects/{id}/wallet/fix-bsc-address [post]
+func (h *LaunchHandler) FixBSCWalletAddress(c *gin.Context) {
+	projectID := c.Param("id")
+
+	var req struct {
+		Launchpad string `json:"launchpad" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "launchpad is required"})
+		return
+	}
+
+	result, err := h.service.FixBSCWalletAddress(projectID, req.Launchpad)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// FixAllBSCWalletAddresses 修复所有 BSC 钱包地址（仅管理员）
+// @Summary 批量修复所有 BSC 钱包地址
+// @Tags Launch
+// @Success 200 {object} object
+// @Router /api/imo/admin/fix-all-bsc-addresses [post]
+func (h *LaunchHandler) FixAllBSCWalletAddresses(c *gin.Context) {
+	results, err := h.service.FixAllBSCWalletAddresses()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	// 统计
+	fixed := 0
+	failed := 0
+	skipped := 0
+	for _, r := range results {
+		if r.Fixed {
+			fixed++
+		} else if r.Error != "" && r.Error != "address already correct" {
+			failed++
+		} else {
+			skipped++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"results": results,
+			"summary": gin.H{
+				"total":   len(results),
+				"fixed":   fixed,
+				"failed":  failed,
+				"skipped": skipped,
+			},
+		},
+	})
+}

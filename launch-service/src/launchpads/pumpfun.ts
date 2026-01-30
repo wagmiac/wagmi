@@ -92,21 +92,42 @@ export class PumpFunLauncher {
       // 准备图片
       let imageBlob: Blob | undefined;
       if (metadata.image) {
+        console.log(`[PumpFun] Processing image: ${metadata.image.substring(0, 100)}...`);
         if (metadata.image.startsWith('data:')) {
           // Base64 图片
           const base64Data = metadata.image.split(',')[1];
           const buffer = Buffer.from(base64Data, 'base64');
           imageBlob = new Blob([buffer], { type: 'image/png' });
+          console.log(`[PumpFun] Base64 image decoded, size: ${buffer.length} bytes`);
         } else if (metadata.image.startsWith('http')) {
-          // URL 图片，下载
-          const response = await fetch(metadata.image);
-          const arrayBuffer = await response.arrayBuffer();
-          imageBlob = new Blob([arrayBuffer], { type: 'image/png' });
+          // URL 图片，下载（使用代理如果配置了）
+          console.log(`[PumpFun] Downloading image from URL: ${metadata.image}`);
+          try {
+            let response: Response;
+            if (CONFIG.httpProxy) {
+              const agent = new HttpsProxyAgent(CONFIG.httpProxy);
+              response = await nodeFetch(metadata.image, { agent }) as unknown as Response;
+            } else {
+              response = await fetch(metadata.image);
+            }
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            imageBlob = new Blob([arrayBuffer], { type: 'image/png' });
+            console.log(`[PumpFun] Image downloaded successfully, size: ${arrayBuffer.byteLength} bytes`);
+          } catch (imgErr) {
+            console.error(`[PumpFun] Failed to download image:`, imgErr);
+            // 继续使用空图片
+          }
         }
+      } else {
+        console.log(`[PumpFun] No image provided in metadata`);
       }
       
       // 如果没有图片，创建一个空的占位图片
       if (!imageBlob) {
+        console.log(`[PumpFun] Using placeholder image (no valid image provided)`);
         // 创建一个简单的 1x1 像素的 PNG
         const emptyPng = new Uint8Array([
           0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,

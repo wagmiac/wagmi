@@ -223,7 +223,7 @@ export class FlapLauncher {
    * @param hasTax 是否是税币
    * @param maxIterations 最大迭代次数
    */
-  async findVanitySalt(hasTax: boolean = false, maxIterations: number = 100000): Promise<{ salt: string; address: string }> {
+  async findVanitySalt(hasTax: boolean = false, maxIterations: number = 500000): Promise<{ salt: string; address: string }> {
     const suffix = hasTax ? '7777' : '8888';
     const tokenImpl = hasTax ? TOKEN_IMPL_TAX_V1 : TOKEN_IMPL_NO_TAX;
     

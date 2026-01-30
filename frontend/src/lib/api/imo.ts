@@ -301,6 +301,45 @@ export async function exportDevWalletKey(projectId: string, launchpad: string) {
   });
 }
 
+// 修复单个项目的 BSC 钱包地址（仅管理员）
+export async function fixBSCWalletAddress(projectId: string, launchpad: string) {
+  return request<{
+    projectId: string;
+    ticker: string;
+    launchpad: string;
+    oldAddress: string;
+    newAddress: string;
+    fixed: boolean;
+    error?: string;
+  }>(`/imo/admin/projects/${projectId}/wallet/fix-bsc-address`, {
+    method: 'POST',
+    body: JSON.stringify({ launchpad }),
+  });
+}
+
+// 批量修复所有 BSC 钱包地址（仅管理员）
+export async function fixAllBSCWalletAddresses() {
+  return request<{
+    results: Array<{
+      projectId: string;
+      ticker: string;
+      launchpad: string;
+      oldAddress: string;
+      newAddress: string;
+      fixed: boolean;
+      error?: string;
+    }>;
+    summary: {
+      total: number;
+      fixed: number;
+      failed: number;
+      skipped: number;
+    };
+  }>(`/imo/admin/fix-all-bsc-addresses`, {
+    method: 'POST',
+  });
+}
+
 // AI 评估项目
 export async function evaluateProject(projectId: string) {
   return request(`/imo/admin/projects/${projectId}/evaluate`, {

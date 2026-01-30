@@ -68,6 +68,12 @@ export function verifySignature(req: Request, res: Response, next: NextFunction)
     .update(payload)
     .digest('hex');
   
+  // 调试日志
+  console.log('[Security] Verifying signature, timestamp:', timestamp);
+  console.log('[Security] Body JSON (sorted):', bodyJson);
+  console.log('[Security] Expected signature:', expectedSignature);
+  console.log('[Security] Received signature:', signature);
+  
   // 安全比较（先检查长度，避免 timingSafeEqual 报错）
   const sigBuffer = Buffer.from(signature);
   const expectedBuffer = Buffer.from(expectedSignature);
@@ -75,6 +81,7 @@ export function verifySignature(req: Request, res: Response, next: NextFunction)
   if (sigBuffer.length !== expectedBuffer.length || 
       !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
     console.warn('[Security] Invalid signature from', getClientIP(req));
+    console.warn('[Security] Signature mismatch - received:', signature, 'expected:', expectedSignature);
     res.status(401).json({
       success: false,
       error: 'Invalid signature',
@@ -145,15 +152,30 @@ export function checkDailyLimit(req: Request, res: Response, next: NextFunction)
  * 交易金额限制检查
  */
 export function checkAmountLimit(req: Request, res: Response, next: NextFunction): void {
-  const { launchpad, amount, initialBuyAmount } = req.body;
+  const { launchpad, amount, initialBuyAmount, chain } = req.body;
   
   // 确定使用的金额
   const txAmount = amount || initialBuyAmount || 0;
   
   // 根据链类型检查限额
-  const isSolana = ['pump.fun', 'trends.fun', 'bags.fm'].includes(launchpad);
+  // 优先使用 chain 字段（transfer-token 等接口），其次使用 launchpad（create 接口）
+  let isSolana = false;
+  if (chain) {
+    isSolana = chain === 'solana';
+  } else if (launchpad) {
+    isSolana = ['pump.fun', 'trends.fun', 'bags.fm', 'flap.sh'].includes(launchpad);
+  }
+  
   const maxAmount = isSolana ? CONFIG.limits.maxBuyAmountSOL : CONFIG.limits.maxBuyAmountBNB;
   const currency = isSolana ? 'SOL' : 'BNB';
+  
+  // 对于代币转账（amount 是代币数量而非原生币数量），跳过限额检查
+  // 因为 amount 代表的是代币数量（可能是很大的整数），不是 SOL/BNB 金额
+  if (amount && !initialBuyAmount) {
+    // 这是代币转账请求，跳过金额限制检查
+    next();
+    return;
+  }
   
   if (txAmount > maxAmount) {
     console.warn(`[Security] Amount ${txAmount} ${currency} exceeds limit ${maxAmount}`);

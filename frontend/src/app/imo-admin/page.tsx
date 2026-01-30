@@ -14,6 +14,8 @@ import {
   evaluateProject,
   getDevWallet,
   exportDevWalletKey,
+  fixBSCWalletAddress,
+  fixAllBSCWalletAddresses,
 } from "@/lib/api/imo";
 import Link from "next/link";
 import Dropdown from "@/components/ui/Dropdown";
@@ -67,6 +69,8 @@ export default function IMOAdminPage() {
   const [loadingWallets, setLoadingWallets] = useState(false);
   const [exportingKey, setExportingKey] = useState<string | null>(null);
   const [exportedKeys, setExportedKeys] = useState<Record<string, string>>({});
+  const [fixingWallet, setFixingWallet] = useState<string | null>(null);
+  const [fixingAllWallets, setFixingAllWallets] = useState(false);
 
   // 使用 auth-context 的管理员检查
   const isAdmin = checkIsAdmin(user);
@@ -233,6 +237,58 @@ export default function IMOAdminPage() {
   function copyPrivateKey(key: string) {
     navigator.clipboard.writeText(key);
     toast.success("私钥已复制到剪贴板");
+  }
+
+  // 修复单个 BSC 钱包地址
+  async function handleFixBSCWallet(projectId: string, launchpad: string) {
+    if (!confirm(`确定要修复 ${launchpad} 的 BSC 钱包地址吗？\n\n这会从私钥重新推导正确的地址并更新数据库。`)) {
+      return;
+    }
+    
+    setFixingWallet(launchpad);
+    try {
+      const res = await fixBSCWalletAddress(projectId, launchpad);
+      if (res.success && res.data) {
+        if (res.data.fixed) {
+          toast.success(`地址已修复!\n旧: ${res.data.oldAddress}\n新: ${res.data.newAddress}`);
+          // 更新本地钱包列表
+          setWallets(prev => ({
+            ...prev,
+            [launchpad]: { address: res.data!.newAddress, launchpad },
+          }));
+        } else {
+          toast.info(res.data.error || "地址无需修复");
+        }
+      } else {
+        toast.error(res.error || "修复失败");
+      }
+    } catch {
+      toast.error("修复失败");
+    } finally {
+      setFixingWallet(null);
+    }
+  }
+
+  // 批量修复所有 BSC 钱包地址
+  async function handleFixAllBSCWallets() {
+    if (!confirm("确定要修复所有 BSC 钱包地址吗？\n\n这会扫描所有 BSC 项目并修复地址。")) {
+      return;
+    }
+    
+    setFixingAllWallets(true);
+    try {
+      const res = await fixAllBSCWalletAddresses();
+      if (res.success && res.data) {
+        const { summary } = res.data;
+        toast.success(`修复完成!\n总计: ${summary.total}\n已修复: ${summary.fixed}\n失败: ${summary.failed}\n跳过: ${summary.skipped}`);
+      } else {
+        toast.error(res.error || "修复失败");
+      }
+    } catch {
+      toast.error("修复失败");
+    } finally {
+      setFixingAllWallets(false);
+    }
   }
 
   // 未连接钱包或非管理员
@@ -698,7 +754,9 @@ export default function IMOAdminPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {Object.entries(wallets).map(([pad, info]) => (
+                  {Object.entries(wallets).map(([pad, info]) => {
+                    const isBSC = LAUNCHPAD_CONFIG[pad as keyof typeof LAUNCHPAD_CONFIG]?.chain === 'bsc';
+                    return (
                     <div key={pad} className="bg-white/5 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-[#FF8C00]">{pad}</span>
@@ -732,22 +790,44 @@ export default function IMOAdminPage() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => handleExportKey(walletProject.id, pad)}
-                          disabled={exportingKey === pad}
-                          className="w-full px-3 py-2 text-sm bg-red-500/10 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition disabled:opacity-50"
-                        >
-                          {exportingKey === pad ? "导出中..." : "🔓 导出私钥"}
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => handleExportKey(walletProject.id, pad)}
+                            disabled={exportingKey === pad}
+                            className="w-full px-3 py-2 text-sm bg-red-500/10 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition disabled:opacity-50"
+                          >
+                            {exportingKey === pad ? "导出中..." : "🔓 导出私钥"}
+                          </button>
+                          
+                          {/* BSC 钱包显示修复按钮 */}
+                          {isBSC && (
+                            <button
+                              onClick={() => handleFixBSCWallet(walletProject.id, pad)}
+                              disabled={fixingWallet === pad}
+                              className="w-full px-3 py-2 text-sm bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 rounded-lg hover:bg-yellow-500/20 transition disabled:opacity-50"
+                            >
+                              {fixingWallet === pad ? "修复中..." : "🔧 修复BSC地址"}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
-                  ))}
+                  )})}
                 </div>
               )}
               
+              {/* 批量修复所有 BSC 地址按钮 */}
+              <button
+                onClick={handleFixAllBSCWallets}
+                disabled={fixingAllWallets}
+                className="w-full mt-4 px-4 py-2 bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 rounded-lg hover:bg-yellow-500/20 transition disabled:opacity-50"
+              >
+                {fixingAllWallets ? "批量修复中..." : "🔧 修复所有BSC钱包地址"}
+              </button>
+              
               <button
                 onClick={() => setWalletModalOpen(false)}
-                className="w-full mt-6 px-4 py-2 bg-white/10 text-gray-400 rounded-lg hover:bg-white/20 transition"
+                className="w-full mt-2 px-4 py-2 bg-white/10 text-gray-400 rounded-lg hover:bg-white/20 transition"
               >
                 关闭
               </button>

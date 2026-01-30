@@ -388,7 +388,7 @@ type LaunchWithPaymentRequest struct {
 	FirstBuyAmount float64 `json:"firstBuyAmount" binding:"required"` // 首单购买金额
 	UserWallet     string  `json:"userWallet" binding:"required"`     // 用户钱包地址
 	PaymentTxHash  string  `json:"paymentTxHash" binding:"required"`  // 支付交易哈希
-	TaxRate        int     `json:"taxRate"`                           // flap.sh 专属：税率（基点，0=无税，100=1%，300=3%）
+	TaxRate        int     `json:"taxRate"`                           // flap.sh 专属：税率（基点，0=无税，100=1%，300=3%，500=5%，1000=10%）
 }
 
 // LaunchWithPayment 带支付哈希的直接发射（用户已通过钱包支付）

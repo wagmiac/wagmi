@@ -33,7 +33,7 @@ export default function LaunchPage() {
   const [firstBuyAmount, setFirstBuyAmount] = useState<string>("0.1");
   const [devWalletAddress, setDevWalletAddress] = useState<string | null>(null);
   const [isLoadingWallet, setIsLoadingWallet] = useState(false);
-  // flap.sh 专属：税率选项（基点，100=1%, 300=3%）
+  // flap.sh 专属：税率选项（基点，100=1%, 300=3%, 500=5%, 1000=10%）
   const [taxRate, setTaxRate] = useState<number>(0);
   
   // 发射结果
@@ -217,7 +217,7 @@ export default function LaunchPage() {
         firstBuyAmount: amount,
         userWallet: actualUserWallet,
         paymentTxHash: transferResult.txHash!,
-        // flap.sh 税率（0=无税，100=1%，300=3%）
+        // flap.sh 税率（0=无税，100=1%，300=3%，500=5%，1000=10%）
         taxRate: selectedLaunchpad === "flap.sh" ? taxRate : undefined,
       });
 
@@ -337,11 +337,13 @@ export default function LaunchPage() {
                   <label className="block text-sm font-medium text-gray-400 mb-2">
                     交易税率（可选）
                   </label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-5 gap-2">
                     {[
                       { value: 0, label: "无税" },
                       { value: 100, label: "1%" },
                       { value: 300, label: "3%" },
+                      { value: 500, label: "5%" },
+                      { value: 1000, label: "10%" },
                     ].map((option) => (
                       <button
                         key={option.value}
